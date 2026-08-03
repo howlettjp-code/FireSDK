@@ -197,9 +197,16 @@ export class FireClient {
 
   // ── v2 — flow definitions (reusable named DAG templates) ────────────
 
-  createFlowDefinition(slug, label, spec, { description } = {}) {
+  /**
+   * Defaults to a public, discoverable flow (`GET /v2/flows` lists it,
+   * any token can run it) unless `isPublic: false` — your token's
+   * account owns it either way, and only the owner can edit or
+   * deactivate it regardless of visibility.
+   */
+  createFlowDefinition(slug, label, spec, { description, isPublic } = {}) {
     const body = { slug, label, spec };
     if (description !== undefined) body.description = description;
+    if (isPublic !== undefined) body.is_public = isPublic;
     return this._request('POST', 'v2/flows', { json: body });
   }
 

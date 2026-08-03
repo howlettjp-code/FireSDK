@@ -102,6 +102,11 @@ $run = $client->runFlow(flow: ['steps' => [/* ... */]], input: [/* ... */]);
 ```php
 $client->createAgentConfig(slug: 'hot', label: 'Hot', speciesName: 'claude-sonnet-4-5', temperature: 0.9);
 $client->createFlowDefinition(slug: 'my-flow', label: 'My Flow', spec: ['steps' => [/* ... */]]);
+
+// Flows default to public (discoverable via GET /v2/flows by anyone,
+// runnable by anyone) — your account owns it either way, and only the
+// owner can edit/deactivate it regardless of visibility.
+$client->createFlowDefinition(slug: 'my-private-flow', label: 'Mine', spec: ['steps' => [/* ... */]], isPublic: false);
 ```
 
 ## Errors

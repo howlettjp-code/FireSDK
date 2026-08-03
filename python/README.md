@@ -130,6 +130,12 @@ spec = {
 run = client.run_flow(flow=spec, input={"question": "..."})
 ```
 
+A saved flow defaults to public (discoverable via `list_flow_definitions`/
+`GET /v2/flows` by anyone, runnable by anyone) — your account owns it
+either way, and only the owner can edit/deactivate it regardless of
+visibility. Pass `is_public=False` to `create_flow_definition` to keep it
+private instead.
+
 `{{token.path}}` inside a step's message content resolves against
 `input.*` and any already-completed step's `{{step_key.output.content}}`
 / `{{step_key.human_input.*}}`. See `examples/triad_example.py` and

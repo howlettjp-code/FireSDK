@@ -97,6 +97,11 @@ const run = await client.runFlow({ flow: { steps: [/* ... */] }, input: { /* ...
 ```js
 await client.createAgentConfig('hot', 'Hot', { speciesName: 'claude-sonnet-4-5', temperature: 0.9 });
 await client.createFlowDefinition('my-flow', 'My Flow', { steps: [/* ... */] });
+
+// Flows default to public (discoverable via GET /v2/flows by anyone,
+// runnable by anyone) — your account owns it either way, and only the
+// owner can edit/deactivate it regardless of visibility.
+await client.createFlowDefinition('my-private-flow', 'Mine', { steps: [/* ... */] }, { isPublic: false });
 ```
 
 ## Errors

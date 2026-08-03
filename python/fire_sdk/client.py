@@ -202,11 +202,23 @@ class FireClient:
     # ── v2 — flow definitions (reusable named DAG templates) ────────────
 
     def create_flow_definition(
-        self, slug: str, label: str, spec: dict[str, Any], *, description: str | None = None
+        self,
+        slug: str,
+        label: str,
+        spec: dict[str, Any],
+        *,
+        description: str | None = None,
+        is_public: bool | None = None,
     ) -> dict[str, Any]:
+        """Defaults to a public, discoverable flow (``GET /v2/flows``
+        lists it, any token can run it) unless ``is_public=False`` — your
+        token's account owns it either way, and only the owner can edit
+        or deactivate it regardless of visibility."""
         body: dict[str, Any] = {"slug": slug, "label": label, "spec": spec}
         if description is not None:
             body["description"] = description
+        if is_public is not None:
+            body["is_public"] = is_public
         return self._request("POST", "v2/flows", json=body)
 
     def get_flow_definition(self, slug: str) -> dict[str, Any]:

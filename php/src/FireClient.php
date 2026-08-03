@@ -302,10 +302,17 @@ class FireClient
      * @param array<string, mixed> $spec
      * @return array<string, mixed>
      */
-    public function createFlowDefinition(string $slug, string $label, array $spec, ?string $description = null): array
+    /**
+     * Defaults to a public, discoverable flow (`GET /v2/flows` lists it,
+     * any token can run it) unless `$isPublic = false` — your token's
+     * account owns it either way, and only the owner can edit or
+     * deactivate it regardless of visibility.
+     */
+    public function createFlowDefinition(string $slug, string $label, array $spec, ?string $description = null, ?bool $isPublic = null): array
     {
         $body = ['slug' => $slug, 'label' => $label, 'spec' => $spec];
         if ($description !== null) $body['description'] = $description;
+        if ($isPublic !== null) $body['is_public'] = $isPublic;
         return $this->request('POST', 'v2/flows', json: $body);
     }
 
