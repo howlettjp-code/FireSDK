@@ -1,0 +1,41 @@
+name: Split PHP subtree
+
+# Mirrors php/ into howlettjp-code/FireSDK-PHP — a thin, read-only repo
+# that exists only so Packagist has a root-level composer.json to read
+# (Packagist doesn't support a package living in a monorepo subdirectory).
+# Do not edit FireSDK-PHP directly; it's overwritten on every run.
+
+on:
+  push:
+    branches: [main]
+    paths: ['php/**']
+    tags: ['v*']
+  workflow_dispatch: {}
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.FIRESDK_PHP_DEPLOY_KEY }}
+
+      - name: Split php/ into a standalone branch
+        run: git subtree split --prefix=php -b php-split
+
+      - name: Push branch to FireSDK-PHP
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+          git push git@github.com:howlettjp-code/FireSDK-PHP.git php-split:main --force
+
+      - name: Mirror the tag, if this run was triggered by one
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          git tag "$TAG" php-split
+          git push git@github.com:howlettjp-code/FireSDK-PHP.git "refs/tags/$TAG" --force
