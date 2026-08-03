@@ -56,3 +56,11 @@ class FireNotFoundError(FireError):
 
 class FireServerError(FireError):
     """5xx not covered above — provider/pipeline failure, etc."""
+
+
+class FireTimeoutError(TimeoutError):
+    """Raised by wait_for_flow()/FlowRun.wait() when a run is still
+    pending/running after the given timeout — a client-side polling
+    timeout, not a Fire API error, so it deliberately does not extend
+    FireError. Subclasses the builtin TimeoutError (not FireError) so
+    existing `except TimeoutError` handlers still catch it."""

@@ -31,17 +31,18 @@ async function main() {
 
   console.log(`Question: ${question}\n`);
   console.log('Starting the triad flow (hot_1 + hot_2 run in parallel)...');
-  let run = await client.runFlow({ flowSlug: 'triad', input: { prompt_package: question } });
-  console.log(`  run_id=${run.run_id} status=${run.status}`);
+  const run = await client.runFlow({ flowSlug: 'triad', input: { prompt_package: question } });
+  console.log(`  run_id=${run.runId} status=${run.status}`);
 
   // Execution is always queued — poll until it lands somewhere interesting.
-  run = await client.waitForFlow(run.run_id);
+  // FlowRun#wait mutates `run` in place, so it stays current.
+  await run.wait();
   console.log(`  -> ${run.status}\n`);
 
   if (run.status === 'awaiting_human') {
-    const gate = run.steps.find((s) => s.status === 'awaiting_human');
+    const gate = run.gatingStep();
 
-    console.log(`Paused for human review: ${gate.prompt_for_human}\n`);
+    console.log(`Paused for human review: ${gate.promptForHuman}\n`);
     console.log(`Agreeable take:\n  ${gate.context.hot_1}\n`);
     console.log(`Contrarian take:\n  ${gate.context.hot_2}\n`);
 
@@ -49,15 +50,15 @@ async function main() {
     const note = await rl.question('Guidance for the synthesizer (or press Enter to let it decide): ');
     rl.close();
 
-    run = await client.resumeFlowRun(run.run_id, gate.step_key, { note });
-    run = await client.waitForFlow(run.run_id);
+    await run.resume(gate.stepKey, { note });
+    await run.wait();
     console.log(`\n  -> ${run.status}`);
   }
 
   if (run.status === 'completed') {
     console.log('\n=== Final synthesized answer ===');
     console.log(run.output.content);
-    console.log(`\n(cost: $${run.total_cost_usd.toFixed(6)})`);
+    console.log(`\n(cost: $${run.totalCostUsd.toFixed(6)})`);
   } else {
     console.log(`\nRun ended in status='${run.status}': ${run.error ?? ''}`);
   }

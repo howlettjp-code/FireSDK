@@ -32,33 +32,34 @@ def main() -> None:
     print(f"Question: {question}\n")
     print("Starting the triad flow (hot_1 + hot_2 run in parallel)...")
     run = client.run_flow(flow_slug="triad", input={"prompt_package": question})
-    print(f"  run_id={run['run_id']} status={run['status']}")
+    print(f"  run_id={run.run_id} status={run.status}")
 
     # Execution is always queued — poll until it lands somewhere interesting.
-    run = client.wait_for_flow(run["run_id"])
-    print(f"  -> {run['status']}\n")
+    # FlowRun.wait() mutates the run object in place, so `run` stays current.
+    run.wait()
+    print(f"  -> {run.status}\n")
 
-    if run["status"] == "awaiting_human":
-        gate = next(s for s in run["steps"] if s["status"] == "awaiting_human")
+    if run.status == "awaiting_human":
+        gate = run.gating_step()
 
-        print(f"Paused for human review: {gate['prompt_for_human']}\n")
+        print(f"Paused for human review: {gate.prompt_for_human}\n")
         print("Agreeable take:")
-        print(f"  {gate['context']['hot_1']}\n")
+        print(f"  {gate.context['hot_1']}\n")
         print("Contrarian take:")
-        print(f"  {gate['context']['hot_2']}\n")
+        print(f"  {gate.context['hot_2']}\n")
 
         note = input("Guidance for the synthesizer (or press Enter to let it decide): ")
 
-        run = client.resume_flow_run(run["run_id"], gate["step_key"], {"note": note})
-        run = client.wait_for_flow(run["run_id"])
-        print(f"\n  -> {run['status']}")
+        run.resume(gate.step_key, {"note": note})
+        run.wait()
+        print(f"\n  -> {run.status}")
 
-    if run["status"] == "completed":
+    if run.status == "completed":
         print("\n=== Final synthesized answer ===")
-        print(run["output"]["content"])
-        print(f"\n(cost: ${run['total_cost_usd']:.6f})")
+        print(run.output["content"])
+        print(f"\n(cost: ${run.total_cost_usd:.6f})")
     else:
-        print(f"\nRun ended in status={run['status']!r}: {run.get('error')}")
+        print(f"\nRun ended in status={run.status!r}: {run.error}")
 
 
 if __name__ == "__main__":

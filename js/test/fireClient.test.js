@@ -9,6 +9,8 @@ import {
   FireTimeoutError,
   FireValidationError,
 } from '../src/errors.js';
+import { FlowRun } from '../src/results.js';
+import { Species } from '../src/species.js';
 
 /**
  * Unit tests for FireClient — a fake fetch stands in for the network.
@@ -86,6 +88,102 @@ describe('routing', () => {
     await client.resumeFlowRun(1, 'review', { note: 'x' });
     assert.equal(calls[0].url, 'https://fire.example.test/v2/flows/runs/1/resume');
   });
+
+  test('image hits v1', async () => {
+    const { client, calls } = clientWith(200, { images: [], model: 'm', provider: 'p' });
+    await client.image('a cat');
+    assert.equal(calls[0].url, 'https://fire.example.test/v1/image');
+  });
+
+  test('runWorkflow hits v1/workflows/{slug}', async () => {
+    const { client, calls } = clientWith(200, { ok: true });
+    await client.runWorkflow('article', { source_text: '...' });
+    assert.equal(calls[0].url, 'https://fire.example.test/v1/workflows/article');
+    assert.equal(JSON.parse(calls[0].init.body).source_text, '...');
+  });
+});
+
+describe('typed results', () => {
+  test('chat returns a ChatResult', async () => {
+    const body = {
+      content: 'hi there', model: 'Claude Sonnet 4.5', provider: 'edenai',
+      usage: { input: 10, output: 5 }, meta: { price: { usd: 0.001 }, log_id: 42 },
+    };
+    const { client } = clientWith(200, body);
+    const result = await client.chat([{ role: 'user', content: 'hi' }]);
+    assert.equal(result.content, 'hi there');
+    assert.equal(result.usage.input, 10);
+    assert.equal(result.priceUsd, 0.001);
+    assert.equal(result.logId, 42);
+    assert.deepEqual(result.raw, body);
+  });
+
+  test('chatParallel returns per-item results', async () => {
+    const body = { results: [
+      { ok: true, content: 'a', model: 'm1', usage: { input: 1, output: 1 }, meta: { price: { usd: 0.0001 } } },
+      { ok: false, error: 'boom' },
+    ] };
+    const { client } = clientWith(200, body);
+    const result = await client.chatParallel([{ messages: [] }, { messages: [] }]);
+    assert.equal(result.results.length, 2);
+    assert.equal(result.results[0].ok, true);
+    assert.equal(result.results[0].content, 'a');
+    assert.equal(result.results[1].ok, false);
+    assert.equal(result.results[1].error, 'boom');
+  });
+
+  test('image returns an ImageResult', async () => {
+    const body = { images: [{ b64: 'abc', url: null }], model: 'gpt-image-1', provider: 'openai', meta: { price: { usd: 0.06 } } };
+    const { client } = clientWith(200, body);
+    const result = await client.image('a cat');
+    assert.equal(result.images.length, 1);
+    assert.equal(result.images[0].b64, 'abc');
+    assert.equal(result.priceUsd, 0.06);
+  });
+
+  test('runWorkflow returns a thin WorkflowResult', async () => {
+    const body = { anything: 'the workflow wants to return' };
+    const { client } = clientWith(200, body);
+    const result = await client.runWorkflow('article', { source_text: '...' });
+    assert.equal(result.workflow, 'article');
+    assert.deepEqual(result.raw, body);
+  });
+
+  test('runFlow returns a FlowRun', async () => {
+    const { client } = clientWith(202, { run_id: 5, status: 'pending', steps: [] });
+    const run = await client.runFlow({ flowSlug: 'triad', input: {} });
+    assert.ok(run instanceof FlowRun);
+    assert.equal(run.runId, 5);
+    assert.equal(run.status, 'pending');
+  });
+
+  test('flow run steps are typed and the gating step is findable', async () => {
+    const body = {
+      run_id: 5, status: 'awaiting_human', steps: [
+        { step_key: 'hot_1', kind: 'agent_call', status: 'completed', depends_on: [], error: null },
+        { step_key: 'review', kind: 'human_gate', status: 'awaiting_human', depends_on: ['hot_1'],
+          error: null, prompt_for_human: 'go?', context: { hot_1: '...' } },
+      ],
+    };
+    const { client } = clientWith(200, body);
+    const run = await client.getFlowRun(5);
+    const gate = run.gatingStep();
+    assert.ok(gate);
+    assert.equal(gate.stepKey, 'review');
+    assert.equal(gate.promptForHuman, 'go?');
+  });
+});
+
+describe('species registry', () => {
+  test('known constant resolves to a species_name string', () => {
+    assert.equal(Species.anthropic.CLAUDE_SONNET_4_5, 'claude-sonnet-4-5');
+  });
+
+  test('species usable directly as speciesName', async () => {
+    const { client, calls } = clientWith(200, { content: 'hi' });
+    await client.chat([{ role: 'user', content: 'hi' }], { speciesName: Species.anthropic.CLAUDE_SONNET_4_5 });
+    assert.equal(JSON.parse(calls[0].init.body).species_name, 'claude-sonnet-4-5');
+  });
 });
 
 describe('verbosity', () => {
@@ -147,6 +245,15 @@ describe('waitForFlow', () => {
   test('times out while still running', async () => {
     const { client } = clientWith(200, { run_id: 1, status: 'running' });
     await assert.rejects(() => client.waitForFlow(1, { pollInterval: 5, timeout: 30 }), FireTimeoutError);
+  });
+
+  test('FlowRun#wait mutates in place', async () => {
+    const { client } = clientWith(200, { run_id: 1, status: 'completed', output: { content: 'done' } });
+    const running = new FlowRun(client, { run_id: 1, status: 'running' });
+    const result = await running.wait({ pollInterval: 5, timeout: 1000 });
+    assert.equal(result, running); // mutates and returns self
+    assert.equal(running.status, 'completed');
+    assert.equal(running.output.content, 'done');
   });
 });
 

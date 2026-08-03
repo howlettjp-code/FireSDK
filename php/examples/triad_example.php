@@ -8,11 +8,7 @@ declare(strict_types=1);
  * cool synthesizer writes the final answer. Mirrors
  * python/examples/triad_example.py exactly.
  *
- * Usage:
- *     FIRE_TOKEN=fire_sk_... php examples/triad_example.php "Should cities ban cars downtown?"
- *
- * Get a token from whoever gave you access to this SDK, or self-serve one
- * with a tier code (see README.md's "Getting a token" section).
+ * Usage: FIRE_TOKEN=fire_sk_... php examples/triad_example.php "your question"
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -34,39 +30,34 @@ function main(): void
     echo "Question: {$question}\n\n";
     echo "Starting the triad flow (hot_1 + hot_2 run in parallel)...\n";
     $run = $client->runFlow(flowSlug: 'triad', input: ['prompt_package' => $question]);
-    echo "  run_id={$run['run_id']} status={$run['status']}\n";
+    echo "  run_id={$run->runId} status={$run->status}\n";
 
     // Execution is always queued — poll until it lands somewhere interesting.
-    $run = $client->waitForFlow($run['run_id']);
-    echo "  -> {$run['status']}\n\n";
+    // FlowRun::wait() mutates $run in place, so it stays current.
+    $run->wait();
+    echo "  -> {$run->status}\n\n";
 
-    if ($run['status'] === 'awaiting_human') {
-        $gate = null;
-        foreach ($run['steps'] as $step) {
-            if ($step['status'] === 'awaiting_human') {
-                $gate = $step;
-                break;
-            }
-        }
+    if ($run->status === 'awaiting_human') {
+        $gate = $run->gatingStep();
 
-        echo "Paused for human review: {$gate['prompt_for_human']}\n\n";
-        echo "Agreeable take:\n  {$gate['context']['hot_1']}\n\n";
-        echo "Contrarian take:\n  {$gate['context']['hot_2']}\n\n";
+        echo "Paused for human review: {$gate->promptForHuman}\n\n";
+        echo "Agreeable take:\n  {$gate->context['hot_1']}\n\n";
+        echo "Contrarian take:\n  {$gate->context['hot_2']}\n\n";
 
         echo 'Guidance for the synthesizer (or press Enter to let it decide): ';
         $note = trim((string) fgets(STDIN));
 
-        $run = $client->resumeFlowRun($run['run_id'], $gate['step_key'], ['note' => $note]);
-        $run = $client->waitForFlow($run['run_id']);
-        echo "\n  -> {$run['status']}\n";
+        $run->resume($gate->stepKey, ['note' => $note]);
+        $run->wait();
+        echo "\n  -> {$run->status}\n";
     }
 
-    if ($run['status'] === 'completed') {
+    if ($run->status === 'completed') {
         echo "\n=== Final synthesized answer ===\n";
-        echo $run['output']['content'] . "\n";
-        echo "\n(cost: \$" . number_format((float) $run['total_cost_usd'], 6) . ")\n";
+        echo $run->output['content'] . "\n";
+        echo "\n(cost: \$" . number_format((float) $run->totalCostUsd, 6) . ")\n";
     } else {
-        echo "\nRun ended in status='{$run['status']}': " . ($run['error'] ?? '') . "\n";
+        echo "\nRun ended in status='{$run->status}': " . ($run->error ?? '') . "\n";
     }
 }
 

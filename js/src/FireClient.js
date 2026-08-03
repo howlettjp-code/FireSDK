@@ -8,19 +8,19 @@ import {
   FireTimeoutError,
   FireValidationError,
 } from './errors.js';
+import { ChatResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult } from './results.js';
 
 export const DEFAULT_BASE_URL = 'https://fire.test1.prosaga.net';
 
-// Terminal flow-run statuses — waitForFlow() stops polling on any of these.
-const FLOW_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'awaiting_human']);
-
 /**
- * A Fire API client bound to one token. Covers L1 (raw chat calls) and v2
- * (data-driven, resumable multi-agent flows). Every method returns the
- * parsed JSON response as a plain object — deliberately no custom response
- * classes, mirroring the Python/PHP SDKs' own design choice on purpose:
- * the three SDKs in this repo are meant to feel like the same client in
- * three languages.
+ * A Fire API client bound to one token. Covers L1 (chat/image), L2
+ * (workflows), and v2 (data-driven, resumable multi-agent flows).
+ * Result-bearing calls return typed objects (see results.js) — three
+ * separate root families matching the three layers Fire itself enforces
+ * server-side, not one shared hierarchy. Discovery/introspection
+ * endpoints (capabilities, status, models, usage) and CRUD metadata
+ * (agent-configs, flow-definitions) stay plain objects on purpose:
+ * they're heterogeneous, evolving documents, not the result of an action.
  */
 export class FireClient {
   /**
@@ -143,13 +143,13 @@ export class FireClient {
    * @param {{role: string, content: string}[]} messages
    * @param {object} [opts]
    */
-  chat(messages, { systemPrompt, speciesName, temperature = 0.7, maxTokens = 1024, tags, options } = {}) {
+  async chat(messages, { systemPrompt, speciesName, temperature = 0.7, maxTokens = 1024, tags, options } = {}) {
     const body = { messages, temperature, max_tokens: maxTokens };
     if (systemPrompt !== undefined) body.system_prompt = systemPrompt;
     if (speciesName !== undefined) body.species_name = speciesName;
     if (tags !== undefined) body.tags = tags;
     if (options !== undefined) body.options = options;
-    return this._request('POST', 'v1/chat', { json: body });
+    return ChatResult.fromRaw(await this._request('POST', 'v1/chat', { json: body }));
   }
 
   /** POST /chat/parallel — up to 10 independent chat requests run
@@ -157,8 +157,31 @@ export class FireClient {
    * synthesis step — use a v2 flow if you need one call to see the
    * others' outputs.
    * @param {object[]} requests */
-  chatParallel(requests) {
-    return this._request('POST', 'v1/chat/parallel', { json: { requests } });
+  async chatParallel(requests) {
+    return ParallelChatResult.fromRaw(await this._request('POST', 'v1/chat/parallel', { json: { requests } }));
+  }
+
+  // ── L1 — image ──────────────────────────────────────────────────────
+
+  /** POST /image — generate images from a text prompt. */
+  async image(prompt, { speciesName, n = 1, size = '1024x1024' } = {}) {
+    const body = { prompt, n, size };
+    if (speciesName !== undefined) body.species_name = speciesName;
+    return ImageResult.fromRaw(await this._request('POST', 'v1/image', { json: body }));
+  }
+
+  // ── L2 — workflows ───────────────────────────────────────────────────
+
+  /**
+   * POST /workflows/{slug} — a canned, server-side, multi-step recipe
+   * (e.g. "image", "article"). Each workflow defines its own request/
+   * response contract — pass whatever fields that workflow expects in
+   * `params`; see API.md's Layer 2 section for each one's shape. The
+   * response is deliberately thin (see results.js's WorkflowResult) —
+   * use `.raw` for the workflow-specific fields.
+   */
+  async runWorkflow(workflowSlug, params = {}) {
+    return WorkflowResult.fromRaw(workflowSlug, await this._request('POST', `v1/workflows/${workflowSlug}`, { json: params }));
   }
 
   // ── v2 — agent configs (reusable model+temperature+system_prompt) ──
@@ -240,7 +263,7 @@ export class FireClient {
    * (an unsaved/ad-hoc spec) has no slug to route on and still calls
    * `POST /v2/flows/run`, the only path that accepts an inline spec.
    */
-  runFlow({ flowSlug, flow, input, conversationId, userMessage, verbosity = 'full' } = {}) {
+  async runFlow({ flowSlug, flow, input, conversationId, userMessage, verbosity = 'full' } = {}) {
     if (!flowSlug && !flow) {
       throw new TypeError('runFlow() requires flowSlug or flow');
     }
@@ -252,23 +275,30 @@ export class FireClient {
     const query = verbosity !== 'full' ? { verbosity } : undefined;
 
     if (flowSlug) {
-      return this._request('POST', `v2/flows/${flowSlug}/run`, { json: body, query });
+      return new FlowRun(this, await this._request('POST', `v2/flows/${flowSlug}/run`, { json: body, query }));
     }
 
     body.flow = flow;
-    return this._request('POST', 'v2/flows/run', { json: body, query });
+    return new FlowRun(this, await this._request('POST', 'v2/flows/run', { json: body, query }));
   }
 
-  getFlowRun(runId, { verbosity = 'full' } = {}) {
+  async getFlowRun(runId, { verbosity = 'full' } = {}) {
     const query = verbosity !== 'full' ? { verbosity } : undefined;
-    return this._request('GET', `v2/flows/runs/${runId}`, { query });
+    return new FlowRun(this, await this._request('GET', `v2/flows/runs/${runId}`, { query }));
   }
 
-  listFlowRuns({ conversationId, status, perPage = 25 } = {}) {
+  /**
+   * Returns `{ runs: FlowRun[], meta: {...} }` — the outer envelope
+   * (pagination) stays a plain object since it's list-specific, not a
+   * result in its own right; each run inside is a full FlowRun.
+   */
+  async listFlowRuns({ conversationId, status, perPage = 25 } = {}) {
     const query = { per_page: perPage };
     if (conversationId !== undefined) query.conversation_id = conversationId;
     if (status !== undefined) query.status = status;
-    return this._request('GET', 'v2/flows/runs', { query });
+    const raw = await this._request('GET', 'v2/flows/runs', { query });
+    raw.runs = (raw.runs ?? []).map((r) => new FlowRun(this, r));
+    return raw;
   }
 
   /**
@@ -277,10 +307,10 @@ export class FireClient {
    * FireConflictError if the run isn't actually waiting, or `stepKey`
    * doesn't match the current gate.
    */
-  resumeFlowRun(runId, stepKey, humanInput, { verbosity = 'full' } = {}) {
+  async resumeFlowRun(runId, stepKey, humanInput, { verbosity = 'full' } = {}) {
     const query = verbosity !== 'full' ? { verbosity } : undefined;
     const body = { step_key: stepKey, human_input: humanInput };
-    return this._request('POST', `v2/flows/runs/${runId}/resume`, { json: body, query });
+    return new FlowRun(this, await this._request('POST', `v2/flows/runs/${runId}/resume`, { json: body, query }));
   }
 
   /**
@@ -288,7 +318,8 @@ export class FireClient {
    * failed, cancelled, or awaiting_human (a human gate is a legitimate
    * stopping point, not a failure; check `result.status` and, if
    * "awaiting_human", call resumeFlowRun() with the gating step's
-   * step_key).
+   * stepKey — or just use FlowRun#wait/#resume, which do this in place
+   * on the run object itself).
    *
    * @throws {FireTimeoutError} if the run is still pending/running after `timeout` ms.
    */
@@ -296,7 +327,7 @@ export class FireClient {
     const deadline = Date.now() + timeout;
     for (;;) {
       const run = await this.getFlowRun(runId, { verbosity });
-      if (FLOW_TERMINAL_STATUSES.has(run.status)) return run;
+      if (run.isTerminal) return run;
       if (Date.now() >= deadline) {
         throw new FireTimeoutError(`flow run ${runId} still '${run.status}' after ${timeout}ms`);
       }

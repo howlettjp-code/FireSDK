@@ -1,16 +1,18 @@
 {
   "name": "@moduspromethean/fire-sdk",
-  "version": "0.2.0",
-  "description": "JS SDK for the Fire AI Inference API (v1 chat + v2 multi-agent flows)",
+  "version": "1.0.0",
+  "description": "JS SDK for the Fire AI Inference API (L1 chat/image, L2 workflows, v2 multi-agent flows)",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=18"
   },
-  "main": "src/FireClient.js",
+  "main": "src/index.js",
   "exports": {
-    ".": "./src/FireClient.js",
-    "./errors": "./src/errors.js"
+    ".": "./src/index.js",
+    "./errors": "./src/errors.js",
+    "./results": "./src/results.js",
+    "./species": "./src/species.js"
   },
   "files": [
     "src"

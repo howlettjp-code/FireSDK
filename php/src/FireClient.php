@@ -12,19 +12,26 @@ use ModusPromethean\FireSdk\Exceptions\FireNotFoundError;
 use ModusPromethean\FireSdk\Exceptions\FireServerError;
 use ModusPromethean\FireSdk\Exceptions\FireTimeoutError;
 use ModusPromethean\FireSdk\Exceptions\FireValidationError;
+use ModusPromethean\FireSdk\Results\ChatResult;
+use ModusPromethean\FireSdk\Results\FlowRun;
+use ModusPromethean\FireSdk\Results\ImageResult;
+use ModusPromethean\FireSdk\Results\ParallelChatResult;
+use ModusPromethean\FireSdk\Results\WorkflowResult;
 
 /**
- * A Fire API client bound to one token. Covers L1 (raw chat calls) and v2
- * (data-driven, resumable multi-agent flows). Every method returns the
- * parsed JSON response as a plain associative array — deliberately no
- * custom response objects, mirroring the Python SDK's own design choice.
+ * A Fire API client bound to one token. Covers L1 (chat/image), L2
+ * (workflows), and v2 (data-driven, resumable multi-agent flows).
+ * Result-bearing calls return typed objects (see Results\*) — three
+ * separate root families matching the three layers Fire itself enforces
+ * server-side, not one shared hierarchy. Discovery/introspection
+ * endpoints (capabilities, status, models, usage) and CRUD metadata
+ * (agent-configs, flow-definitions) stay plain associative arrays on
+ * purpose: they're heterogeneous, evolving documents, not the result of
+ * an action.
  */
 class FireClient
 {
     public const DEFAULT_BASE_URL = 'https://fire.test1.prosaga.net';
-
-    /** Terminal flow-run statuses — waitForFlow() stops polling on any of these. */
-    private const FLOW_TERMINAL_STATUSES = ['completed', 'failed', 'cancelled', 'awaiting_human'];
 
     private readonly string $baseUrl;
 
@@ -208,7 +215,6 @@ class FireClient
      *
      * @param list<array{role: string, content: string}> $messages
      * @param array<string, mixed>|null $options
-     * @return array<string, mixed>
      */
     public function chat(
         array $messages,
@@ -218,14 +224,14 @@ class FireClient
         int $maxTokens = 1024,
         ?array $tags = null,
         ?array $options = null,
-    ): array {
+    ): ChatResult {
         $body = ['messages' => $messages, 'temperature' => $temperature, 'max_tokens' => $maxTokens];
         if ($systemPrompt !== null) $body['system_prompt'] = $systemPrompt;
         if ($speciesName !== null) $body['species_name'] = $speciesName;
         if ($tags !== null) $body['tags'] = $tags;
         if ($options !== null) $body['options'] = $options;
 
-        return $this->request('POST', 'v1/chat', json: $body);
+        return ChatResult::fromRaw($this->request('POST', 'v1/chat', json: $body));
     }
 
     /**
@@ -235,11 +241,38 @@ class FireClient
      * others' outputs.
      *
      * @param list<array<string, mixed>> $requests
-     * @return array<string, mixed>
      */
-    public function chatParallel(array $requests): array
+    public function chatParallel(array $requests): ParallelChatResult
     {
-        return $this->request('POST', 'v1/chat/parallel', json: ['requests' => $requests]);
+        return ParallelChatResult::fromRaw($this->request('POST', 'v1/chat/parallel', json: ['requests' => $requests]));
+    }
+
+    // ── L1 — image ──────────────────────────────────────────────────────
+
+    /** POST /image — generate images from a text prompt. */
+    public function image(string $prompt, ?string $speciesName = null, int $n = 1, string $size = '1024x1024'): ImageResult
+    {
+        $body = ['prompt' => $prompt, 'n' => $n, 'size' => $size];
+        if ($speciesName !== null) $body['species_name'] = $speciesName;
+
+        return ImageResult::fromRaw($this->request('POST', 'v1/image', json: $body));
+    }
+
+    // ── L2 — workflows ───────────────────────────────────────────────────
+
+    /**
+     * POST /workflows/{slug} — a canned, server-side, multi-step recipe
+     * (e.g. "image", "article"). Each workflow defines its own request/
+     * response contract — pass whatever fields that workflow expects in
+     * $params; see API.md's Layer 2 section for each one's shape. The
+     * response is deliberately thin (see Results\WorkflowResult) — use
+     * ->raw for the workflow-specific fields.
+     *
+     * @param array<string, mixed> $params
+     */
+    public function runWorkflow(string $workflowSlug, array $params = []): WorkflowResult
+    {
+        return WorkflowResult::fromRaw($workflowSlug, $this->request('POST', "v1/workflows/{$workflowSlug}", json: $params));
     }
 
     // ── v2 — agent configs (reusable model+temperature+system_prompt) ──
@@ -360,7 +393,6 @@ class FireClient
      *
      * @param array<string, mixed>|null $flow
      * @param array<string, mixed>|null $input
-     * @return array<string, mixed>
      */
     public function runFlow(
         ?string $flowSlug = null,
@@ -369,7 +401,7 @@ class FireClient
         ?int $conversationId = null,
         ?string $userMessage = null,
         string $verbosity = 'full',
-    ): array {
+    ): FlowRun {
         if ($flowSlug === null && $flow === null) {
             throw new \InvalidArgumentException('runFlow() requires flowSlug or flow');
         }
@@ -381,27 +413,33 @@ class FireClient
         $query = $verbosity !== 'full' ? ['verbosity' => $verbosity] : null;
 
         if ($flowSlug !== null) {
-            return $this->request('POST', "v2/flows/{$flowSlug}/run", json: $body, query: $query);
+            return new FlowRun($this, $this->request('POST', "v2/flows/{$flowSlug}/run", json: $body, query: $query));
         }
 
         $body['flow'] = $flow;
-        return $this->request('POST', 'v2/flows/run', json: $body, query: $query);
+        return new FlowRun($this, $this->request('POST', 'v2/flows/run', json: $body, query: $query));
     }
 
-    /** @return array<string, mixed> */
-    public function getFlowRun(int $runId, string $verbosity = 'full'): array
+    public function getFlowRun(int $runId, string $verbosity = 'full'): FlowRun
     {
         $query = $verbosity !== 'full' ? ['verbosity' => $verbosity] : null;
-        return $this->request('GET', "v2/flows/runs/{$runId}", query: $query);
+        return new FlowRun($this, $this->request('GET', "v2/flows/runs/{$runId}", query: $query));
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Returns ['runs' => list<FlowRun>, 'meta' => [...]] — the outer
+     * envelope (pagination) stays a plain array since it's list-specific,
+     * not a result in its own right; each run inside is a full FlowRun.
+     * @return array<string, mixed>
+     */
     public function listFlowRuns(?int $conversationId = null, ?string $status = null, int $perPage = 25): array
     {
         $query = ['per_page' => $perPage];
         if ($conversationId !== null) $query['conversation_id'] = $conversationId;
         if ($status !== null) $query['status'] = $status;
-        return $this->request('GET', 'v2/flows/runs', query: $query);
+        $raw = $this->request('GET', 'v2/flows/runs', query: $query);
+        $raw['runs'] = array_map(fn (array $r) => new FlowRun($this, $r), $raw['runs'] ?? []);
+        return $raw;
     }
 
     /**
@@ -411,35 +449,34 @@ class FireClient
      * doesn't match the current gate.
      *
      * @param array<string, mixed> $humanInput
-     * @return array<string, mixed>
      */
-    public function resumeFlowRun(int $runId, string $stepKey, array $humanInput, string $verbosity = 'full'): array
+    public function resumeFlowRun(int $runId, string $stepKey, array $humanInput, string $verbosity = 'full'): FlowRun
     {
         $query = $verbosity !== 'full' ? ['verbosity' => $verbosity] : null;
         $body = ['step_key' => $stepKey, 'human_input' => $humanInput];
-        return $this->request('POST', "v2/flows/runs/{$runId}/resume", json: $body, query: $query);
+        return new FlowRun($this, $this->request('POST', "v2/flows/runs/{$runId}/resume", json: $body, query: $query));
     }
 
     /**
      * Poll getFlowRun() until it lands on a terminal status — completed,
      * failed, cancelled, or awaiting_human (a human gate is a legitimate
-     * stopping point, not a failure; check result['status'] and, if
+     * stopping point, not a failure; check result->status and, if
      * "awaiting_human", call resumeFlowRun() with the gating step's
-     * step_key).
+     * stepKey — or just use FlowRun::wait()/resume(), which do this in
+     * place on the run object itself).
      *
      * @throws FireTimeoutError if the run is still pending/running after $timeout seconds.
-     * @return array<string, mixed>
      */
-    public function waitForFlow(int $runId, float $pollInterval = 1.5, float $timeout = 120.0, string $verbosity = 'full'): array
+    public function waitForFlow(int $runId, float $pollInterval = 1.5, float $timeout = 120.0, string $verbosity = 'full'): FlowRun
     {
         $deadline = microtime(true) + $timeout;
         while (true) {
             $run = $this->getFlowRun($runId, verbosity: $verbosity);
-            if (in_array($run['status'], self::FLOW_TERMINAL_STATUSES, true)) {
+            if ($run->isTerminal()) {
                 return $run;
             }
             if (microtime(true) >= $deadline) {
-                throw new FireTimeoutError("flow run {$runId} still '{$run['status']}' after {$timeout}s");
+                throw new FireTimeoutError("flow run {$runId} still '{$run->status}' after {$timeout}s");
             }
             usleep((int) ($pollInterval * 1_000_000));
         }

@@ -15,7 +15,10 @@ from fire_sdk import (
     FireClient,
     FireConflictError,
     FireNotFoundError,
+    FireTimeoutError,
     FireValidationError,
+    FlowRun,
+    Species,
 )
 
 
@@ -52,6 +55,19 @@ class FireClientRoutingTest(unittest.TestCase):
             self.client.chat_parallel([{"messages": [{"role": "user", "content": "hi"}]}])
         url = mock_request.call_args.args[1]
         self.assertEqual(url, "https://fire.example.test/v1/chat/parallel")
+
+    def test_image_hits_v1(self):
+        with self._patched(200, {"images": [], "model": "m", "provider": "p"}) as mock_request:
+            self.client.image("a cat")
+        url = mock_request.call_args.args[1]
+        self.assertEqual(url, "https://fire.example.test/v1/image")
+
+    def test_run_workflow_hits_v1_workflows_slug(self):
+        with self._patched(200, {"ok": True}) as mock_request:
+            self.client.run_workflow("article", source_text="...")
+        url = mock_request.call_args.args[1]
+        self.assertEqual(url, "https://fire.example.test/v1/workflows/article")
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"source_text": "..."})
 
     def test_run_flow_with_slug_hits_slug_endpoint(self):
         with self._patched(202, {"run_id": 1, "status": "pending"}) as mock_request:
@@ -92,6 +108,96 @@ class FireClientRoutingTest(unittest.TestCase):
             anon.capabilities()
         headers = mock_request.call_args.kwargs["headers"]
         self.assertNotIn("Authorization", headers)
+
+
+class TypedResultTest(unittest.TestCase):
+    """chat/chat_parallel/image/run_workflow/flow-run methods return typed
+    objects (attribute access), not raw dicts — with .raw always present
+    as an escape hatch for anything the type doesn't model."""
+
+    def setUp(self) -> None:
+        self.client = FireClient(token="fire_sk_test", base_url="https://fire.example.test")
+
+    def _patched(self, status_code: int, body: dict):
+        return patch.object(
+            self.client._session, "request", return_value=_mock_response(status_code, body)
+        )
+
+    def test_chat_returns_chat_result(self):
+        body = {
+            "content": "hi there", "model": "Claude Sonnet 4.5", "provider": "edenai",
+            "usage": {"input": 10, "output": 5}, "meta": {"price": {"usd": 0.001}, "log_id": 42},
+        }
+        with self._patched(200, body):
+            result = self.client.chat([{"role": "user", "content": "hi"}])
+        self.assertEqual(result.content, "hi there")
+        self.assertEqual(result.usage.input, 10)
+        self.assertEqual(result.usage.output, 5)
+        self.assertEqual(result.price_usd, 0.001)
+        self.assertEqual(result.log_id, 42)
+        self.assertEqual(result.raw, body)
+
+    def test_chat_parallel_returns_per_item_results(self):
+        body = {"results": [
+            {"ok": True, "content": "a", "model": "m1", "usage": {"input": 1, "output": 1}, "meta": {"price": {"usd": 0.0001}}},
+            {"ok": False, "error": "boom"},
+        ]}
+        with self._patched(200, body):
+            result = self.client.chat_parallel([{"messages": []}, {"messages": []}])
+        self.assertEqual(len(result.results), 2)
+        self.assertTrue(result.results[0].ok)
+        self.assertEqual(result.results[0].content, "a")
+        self.assertFalse(result.results[1].ok)
+        self.assertEqual(result.results[1].error, "boom")
+
+    def test_image_returns_image_result(self):
+        body = {"images": [{"b64": "abc", "url": None}], "model": "gpt-image-1", "provider": "openai", "meta": {"price": {"usd": 0.06}}}
+        with self._patched(200, body):
+            result = self.client.image("a cat")
+        self.assertEqual(len(result.images), 1)
+        self.assertEqual(result.images[0].b64, "abc")
+        self.assertEqual(result.price_usd, 0.06)
+
+    def test_run_workflow_returns_thin_workflow_result(self):
+        body = {"anything": "the workflow wants to return"}
+        with self._patched(200, body):
+            result = self.client.run_workflow("article", source_text="...")
+        self.assertEqual(result.workflow, "article")
+        self.assertEqual(result.raw, body)
+
+    def test_run_flow_returns_flow_run(self):
+        body = {"run_id": 5, "status": "pending", "steps": []}
+        with self._patched(202, body):
+            run = self.client.run_flow(flow_slug="triad", input={})
+        self.assertIsInstance(run, FlowRun)
+        self.assertEqual(run.run_id, 5)
+        self.assertEqual(run.status, "pending")
+
+    def test_flow_run_steps_are_typed_and_gating_step_is_findable(self):
+        body = {
+            "run_id": 5, "status": "awaiting_human", "steps": [
+                {"step_key": "hot_1", "kind": "agent_call", "status": "completed", "depends_on": [], "error": None},
+                {"step_key": "review", "kind": "human_gate", "status": "awaiting_human", "depends_on": ["hot_1"],
+                 "error": None, "prompt_for_human": "go?", "context": {"hot_1": "..."}},
+            ],
+        }
+        with self._patched(200, body):
+            run = self.client.get_flow_run(5)
+        gate = run.gating_step()
+        self.assertIsNotNone(gate)
+        self.assertEqual(gate.step_key, "review")
+        self.assertEqual(gate.prompt_for_human, "go?")
+
+
+class SpeciesRegistryTest(unittest.TestCase):
+    def test_known_constant_resolves_to_a_species_name_string(self):
+        self.assertEqual(Species.Anthropic.CLAUDE_SONNET_4_5, "claude-sonnet-4-5")
+
+    def test_species_usable_directly_as_species_name(self):
+        client = FireClient(token="fire_sk_test", base_url="https://fire.example.test")
+        with patch.object(client._session, "request", return_value=_mock_response(200, {"content": "hi"})) as mock_request:
+            client.chat([{"role": "user", "content": "hi"}], species_name=Species.Anthropic.CLAUDE_SONNET_4_5)
+        self.assertEqual(mock_request.call_args.kwargs["json"]["species_name"], "claude-sonnet-4-5")
 
 
 class FireClientErrorMappingTest(unittest.TestCase):
@@ -155,19 +261,31 @@ class WaitForFlowTest(unittest.TestCase):
         self.client = FireClient(token="fire_sk_test", base_url="https://fire.example.test")
 
     def test_stops_on_terminal_status(self):
-        with patch.object(self.client, "get_flow_run", return_value={"run_id": 1, "status": "completed"}):
+        run = FlowRun(self.client, {"run_id": 1, "status": "completed"})
+        with patch.object(self.client, "get_flow_run", return_value=run):
             result = self.client.wait_for_flow(1, poll_interval=0)
-        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result.status, "completed")
 
     def test_stops_on_awaiting_human(self):
-        with patch.object(self.client, "get_flow_run", return_value={"run_id": 1, "status": "awaiting_human"}):
+        run = FlowRun(self.client, {"run_id": 1, "status": "awaiting_human"})
+        with patch.object(self.client, "get_flow_run", return_value=run):
             result = self.client.wait_for_flow(1, poll_interval=0)
-        self.assertEqual(result["status"], "awaiting_human")
+        self.assertEqual(result.status, "awaiting_human")
 
     def test_times_out_while_still_running(self):
-        with patch.object(self.client, "get_flow_run", return_value={"run_id": 1, "status": "running"}):
-            with self.assertRaises(TimeoutError):
+        run = FlowRun(self.client, {"run_id": 1, "status": "running"})
+        with patch.object(self.client, "get_flow_run", return_value=run):
+            with self.assertRaises(FireTimeoutError):
                 self.client.wait_for_flow(1, poll_interval=0, timeout=0)
+
+    def test_flow_run_wait_updates_in_place(self):
+        running = FlowRun(self.client, {"run_id": 1, "status": "running"})
+        completed_raw = {"run_id": 1, "status": "completed", "output": {"content": "done"}}
+        with patch.object(self.client, "wait_for_flow", return_value=FlowRun(self.client, completed_raw)):
+            result = running.wait()
+        self.assertIs(result, running)  # mutates and returns self
+        self.assertEqual(running.status, "completed")
+        self.assertEqual(running.output["content"], "done")
 
 
 class RedeemTierCodeTest(unittest.TestCase):

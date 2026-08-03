@@ -1,11 +1,12 @@
 """FireClient — synchronous client for the Fire AI Inference API.
 
-Covers L1 (raw chat calls) and v2 (data-driven, resumable multi-agent
-flows). Every method returns the parsed JSON response as a plain dict —
-deliberately no custom response objects, since the callers this SDK
-targets right now (LLM agents, test scripts) work naturally with JSON and
-don't benefit from having to learn an SDK-specific object model on top of
-it.
+Covers L1 (chat/image), L2 (workflows), and v2 (data-driven, resumable
+multi-agent flows). Result-bearing calls return typed objects (see
+results.py) — three separate root families matching the three layers
+Fire itself enforces server-side, not one shared hierarchy. Discovery/
+introspection endpoints (capabilities, status, models, usage) and CRUD
+metadata (agent-configs, flow-definitions) stay plain dicts on purpose:
+they're heterogeneous, evolving documents, not the result of an action.
 """
 
 from __future__ import annotations
@@ -22,13 +23,12 @@ from .exceptions import (
     FireError,
     FireNotFoundError,
     FireServerError,
+    FireTimeoutError,
     FireValidationError,
 )
+from .results import ChatResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult
 
 DEFAULT_BASE_URL = "https://fire.test1.prosaga.net"
-
-# Terminal flow-run statuses — wait_for_flow() stops polling on any of these.
-_FLOW_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "awaiting_human"}
 
 
 class FireClient:
@@ -133,7 +133,7 @@ class FireClient:
         max_tokens: int = 1024,
         tags: list[str] | None = None,
         options: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> ChatResult:
         """POST /chat — a single chat completion.
 
         Note: for models tagged "reasoning" (see `strengths` in
@@ -151,14 +151,42 @@ class FireClient:
         if options is not None:
             body["options"] = options
 
-        return self._request("POST", "v1/chat", json=body)
+        return ChatResult._from_raw(self._request("POST", "v1/chat", json=body))
 
-    def chat_parallel(self, requests_: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    def chat_parallel(self, requests_: Iterable[dict[str, Any]]) -> ParallelChatResult:
         """POST /chat/parallel — up to 10 independent chat requests run
         concurrently, each item accepting the same fields as :meth:`chat`.
         No synthesis step — use a v2 flow if you need one call to see the
         others' outputs."""
-        return self._request("POST", "v1/chat/parallel", json={"requests": list(requests_)})
+        return ParallelChatResult._from_raw(self._request("POST", "v1/chat/parallel", json={"requests": list(requests_)}))
+
+    # ── L1 — image ──────────────────────────────────────────────────────
+
+    def image(
+        self,
+        prompt: str,
+        *,
+        species_name: str | None = None,
+        n: int = 1,
+        size: str = "1024x1024",
+    ) -> ImageResult:
+        """POST /image — generate images from a text prompt."""
+        body: dict[str, Any] = {"prompt": prompt, "n": n, "size": size}
+        if species_name is not None:
+            body["species_name"] = species_name
+        return ImageResult._from_raw(self._request("POST", "v1/image", json=body))
+
+    # ── L2 — workflows ───────────────────────────────────────────────────
+
+    def run_workflow(self, workflow_slug: str, **params: Any) -> WorkflowResult:
+        """POST /workflows/{slug} — a canned, server-side, multi-step
+        recipe (e.g. "image", "article"). Each workflow defines its own
+        request/response contract — pass whatever fields that workflow
+        expects as keyword args; see API.md's Layer 2 section for each
+        one's shape. The response is deliberately thin (see
+        :class:`~fire_sdk.results.WorkflowResult`) — use ``.raw`` for the
+        workflow-specific fields."""
+        return WorkflowResult._from_raw(workflow_slug, self._request("POST", f"v1/workflows/{workflow_slug}", json=params))
 
     # ── v2 — agent configs (reusable model+temperature+system_prompt) ──
 
@@ -244,7 +272,7 @@ class FireClient:
         conversation_id: int | None = None,
         user_message: str | None = None,
         verbosity: str = "full",
-    ) -> dict[str, Any]:
+    ) -> FlowRun:
         """Start a flow run and return immediately (execution is always
         queued; use :meth:`wait_for_flow` or poll :meth:`get_flow_run`
         yourself for the result).
@@ -270,14 +298,14 @@ class FireClient:
         params = {"verbosity": verbosity} if verbosity != "full" else None
 
         if flow_slug:
-            return self._request("POST", f"v2/flows/{flow_slug}/run", json=body, params=params)
+            return FlowRun(self, self._request("POST", f"v2/flows/{flow_slug}/run", json=body, params=params))
 
         body["flow"] = flow
-        return self._request("POST", "v2/flows/run", json=body, params=params)
+        return FlowRun(self, self._request("POST", "v2/flows/run", json=body, params=params))
 
-    def get_flow_run(self, run_id: int, *, verbosity: str = "full") -> dict[str, Any]:
+    def get_flow_run(self, run_id: int, *, verbosity: str = "full") -> FlowRun:
         params = {"verbosity": verbosity} if verbosity != "full" else None
-        return self._request("GET", f"v2/flows/runs/{run_id}", params=params)
+        return FlowRun(self, self._request("GET", f"v2/flows/runs/{run_id}", params=params))
 
     def list_flow_runs(
         self,
@@ -286,16 +314,21 @@ class FireClient:
         status: str | None = None,
         per_page: int = 25,
     ) -> dict[str, Any]:
+        """Returns ``{"runs": [FlowRun, ...], "meta": {...}}`` — the outer
+        envelope (pagination) stays a plain dict since it's list-specific,
+        not a result in its own right; each run inside is a full FlowRun."""
         params: dict[str, Any] = {"per_page": per_page}
         if conversation_id is not None:
             params["conversation_id"] = conversation_id
         if status is not None:
             params["status"] = status
-        return self._request("GET", "v2/flows/runs", params=params)
+        raw = self._request("GET", "v2/flows/runs", params=params)
+        raw["runs"] = [FlowRun(self, r) for r in raw.get("runs", [])]
+        return raw
 
     def resume_flow_run(
         self, run_id: int, step_key: str, human_input: dict[str, Any], *, verbosity: str = "full"
-    ) -> dict[str, Any]:
+    ) -> FlowRun:
         """POST /flows/runs/{run}/resume — supply human input for the step
         currently gating a paused run (``status == "awaiting_human"``).
         Raises :class:`~fire_sdk.FireConflictError` if the run isn't
@@ -303,7 +336,7 @@ class FireClient:
         """
         params = {"verbosity": verbosity} if verbosity != "full" else None
         body = {"step_key": step_key, "human_input": human_input}
-        return self._request("POST", f"v2/flows/runs/{run_id}/resume", json=body, params=params)
+        return FlowRun(self, self._request("POST", f"v2/flows/runs/{run_id}/resume", json=body, params=params))
 
     def wait_for_flow(
         self,
@@ -312,23 +345,25 @@ class FireClient:
         poll_interval: float = 1.5,
         timeout: float = 120.0,
         verbosity: str = "full",
-    ) -> dict[str, Any]:
+    ) -> FlowRun:
         """Poll :meth:`get_flow_run` until it lands on a terminal status —
         ``completed``, ``failed``, ``cancelled``, or ``awaiting_human``
         (a human gate is a legitimate stopping point, not a failure; check
-        ``result["status"]`` and, if ``"awaiting_human"``, call
-        :meth:`resume_flow_run` with the gating step's ``step_key``).
+        ``result.status`` and, if ``"awaiting_human"``, call
+        :meth:`resume_flow_run` with the gating step's ``step_key`` — or
+        just use :meth:`FlowRun.wait`/:meth:`FlowRun.resume`, which do
+        this in place on the run object itself).
 
-        Raises :class:`TimeoutError` if the run is still ``pending``/
-        ``running`` after ``timeout`` seconds.
+        Raises :class:`~fire_sdk.FireTimeoutError` if the run is still
+        ``pending``/``running`` after ``timeout`` seconds.
         """
         deadline = time.monotonic() + timeout
         while True:
             run = self.get_flow_run(run_id, verbosity=verbosity)
-            if run["status"] in _FLOW_TERMINAL_STATUSES:
+            if run.is_terminal:
                 return run
             if time.monotonic() >= deadline:
-                raise TimeoutError(f"flow run {run_id} still '{run['status']}' after {timeout}s")
+                raise FireTimeoutError(f"flow run {run_id} still '{run.status}' after {timeout}s")
             time.sleep(poll_interval)
 
     # ── v2 — self-service tier onboarding ───────────────────────────────
