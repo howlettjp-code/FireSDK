@@ -233,27 +233,34 @@ class FireClient:
         user_message: str | None = None,
         verbosity: str = "full",
     ) -> dict[str, Any]:
-        """POST /flows/run — start a flow run and return immediately
-        (execution is always queued; use :meth:`wait_for_flow` or poll
-        :meth:`get_flow_run` yourself for the result).
+        """Start a flow run and return immediately (execution is always
+        queued; use :meth:`wait_for_flow` or poll :meth:`get_flow_run`
+        yourself for the result).
 
         Pass exactly one of ``flow_slug`` (a saved flow, e.g. ``"triad"``)
         or ``flow`` (a full inline ``{"steps": [...]}`` spec).
+
+        ``flow_slug`` calls ``POST /v2/flows/{slug}/run`` (added
+        2026-08-03) — the slug itself is the endpoint, same shape as L1's
+        ``POST /v1/workflows/{workflow}``. ``flow`` (an unsaved/ad-hoc
+        spec) has no slug to route on and still calls
+        ``POST /v2/flows/run``, the only path that accepts an inline spec.
         """
         if not flow_slug and not flow:
             raise ValueError("run_flow() requires flow_slug or flow")
 
         body: dict[str, Any] = {"input": input or {}}
-        if flow_slug:
-            body["flow_slug"] = flow_slug
-        if flow:
-            body["flow"] = flow
         if conversation_id is not None:
             body["conversation_id"] = conversation_id
         if user_message is not None:
             body["user_message"] = user_message
 
         params = {"verbosity": verbosity} if verbosity != "full" else None
+
+        if flow_slug:
+            return self._request("POST", f"v2/flows/{flow_slug}/run", json=body, params=params)
+
+        body["flow"] = flow
         return self._request("POST", "v2/flows/run", json=body, params=params)
 
     def get_flow_run(self, run_id: int, *, verbosity: str = "full") -> dict[str, Any]:

@@ -1,8 +1,4 @@
-__pycache__/
-*.pyc
-*.egg-info/
-.venv/
-venv/
-build/
-dist/
-.pytest_cache/
+# Language-specific ignore rules live in python/.gitignore, php/.gitignore,
+# js/.gitignore. This file only covers things common to the whole repo.
+.DS_Store
+*.log

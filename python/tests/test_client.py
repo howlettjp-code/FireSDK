@@ -53,9 +53,15 @@ class FireClientRoutingTest(unittest.TestCase):
         url = mock_request.call_args.args[1]
         self.assertEqual(url, "https://fire.example.test/v1/chat/parallel")
 
-    def test_run_flow_hits_v2(self):
+    def test_run_flow_with_slug_hits_slug_endpoint(self):
         with self._patched(202, {"run_id": 1, "status": "pending"}) as mock_request:
             self.client.run_flow(flow_slug="triad", input={"prompt_package": "x"})
+        url = mock_request.call_args.args[1]
+        self.assertEqual(url, "https://fire.example.test/v2/flows/triad/run")
+
+    def test_run_flow_with_inline_spec_hits_deprecated_body_endpoint(self):
+        with self._patched(202, {"run_id": 1, "status": "pending"}) as mock_request:
+            self.client.run_flow(flow={"steps": []}, input={})
         url = mock_request.call_args.args[1]
         self.assertEqual(url, "https://fire.example.test/v2/flows/run")
 
