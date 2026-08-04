@@ -10,7 +10,12 @@ on:
     branches: [main]
     paths: ['php/**']
     tags: ['v*']
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to mirror (e.g. v1.0.1) — for re-running after a tag push failed, without needing the fix to already be on that tag'
+        required: false
+        type: string
 
 jobs:
   split:
@@ -33,10 +38,11 @@ jobs:
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
           git push git@github.com:howlettjp-code/FireSDK-PHP.git php-split:main --force
 
-      - name: Mirror the tag, if this run was triggered by one
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Mirror the tag, if this run was triggered by one (or given one manually)
+        if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_REF#refs/tags/}"; fi
           # -f: checkout (fetch-depth: 0) already pulled this tag from
           # origin, pointing at the monorepo commit — move it locally to
           # php-split instead of erroring on "tag already exists".
