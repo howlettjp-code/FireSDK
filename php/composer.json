@@ -1,8 +1,14 @@
 {
     "name": "moduspromethean/fire-sdk",
-    "description": "PHP SDK for the Fire AI Inference API (v1 chat + v2 multi-agent flows)",
+    "description": "PHP SDK for the Fire AI Inference API (L1 chat/image, L2 workflows, v2 multi-agent flows)",
     "type": "library",
     "license": "MIT",
+    "homepage": "https://prosaga.net",
+    "support": {
+        "source": "https://github.com/howlettjp-code/FireSDK",
+        "issues": "https://github.com/howlettjp-code/FireSDK/issues",
+        "docs": "https://fire.prosaga.net/v1/capabilities"
+    },
     "require": {
         "php": ">=8.1",
         "ext-curl": "*",
