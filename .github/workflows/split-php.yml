@@ -37,5 +37,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          git tag "$TAG" php-split
+          # -f: checkout (fetch-depth: 0) already pulled this tag from
+          # origin, pointing at the monorepo commit — move it locally to
+          # php-split instead of erroring on "tag already exists".
+          git tag -f "$TAG" php-split
           git push git@github.com:howlettjp-code/FireSDK-PHP.git "refs/tags/$TAG" --force
