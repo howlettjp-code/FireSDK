@@ -33,13 +33,13 @@ export class Usage {
 
 /** POST /v1/chat — one chat completion. */
 export class ChatResult {
-  constructor({ content, model, provider, usage, priceUsd, logId, toolCalls, raw }) {
+  constructor({ content, model, provider, usage, priceUsd, callId, toolCalls, raw }) {
     this.content = content;
     this.model = model;
     this.provider = provider;
     this.usage = usage;
     this.priceUsd = priceUsd;
-    this.logId = logId;
+    this.callId = callId;
     this.toolCalls = toolCalls;
     this.raw = raw;
   }
@@ -53,7 +53,7 @@ export class ChatResult {
       provider: raw.provider ?? '',
       usage: new Usage(usage.input, usage.output),
       priceUsd: meta.price?.usd ?? null,
-      logId: meta.log_id ?? raw.log_id ?? null,
+      callId: meta.call_id ?? raw.call_id ?? null,
       toolCalls: raw.tool_calls ?? null,
       raw,
     });
@@ -62,13 +62,14 @@ export class ChatResult {
 
 /** One item inside a ParallelChatResult — can fail independently of its siblings. */
 export class ChatItemResult {
-  constructor({ ok, content, model, provider, usage, priceUsd, error, raw }) {
+  constructor({ ok, content, model, provider, usage, priceUsd, callId, error, raw }) {
     this.ok = ok;
     this.content = content;
     this.model = model;
     this.provider = provider;
     this.usage = usage;
     this.priceUsd = priceUsd;
+    this.callId = callId;
     this.error = error;
     this.raw = raw;
   }
@@ -83,6 +84,7 @@ export class ChatItemResult {
       provider: raw.provider ?? null,
       usage: usageRaw ? new Usage(usageRaw.input, usageRaw.output) : null,
       priceUsd: meta.price?.usd ?? null,
+      callId: meta.call_id ?? raw.call_id ?? null,
       error: raw.error ?? null,
       raw,
     });
@@ -110,12 +112,12 @@ export class ImageFile {
 
 /** POST /v1/image. */
 export class ImageResult {
-  constructor({ images, model, provider, priceUsd, logId, raw }) {
+  constructor({ images, model, provider, priceUsd, callId, raw }) {
     this.images = images;
     this.model = model;
     this.provider = provider;
     this.priceUsd = priceUsd;
-    this.logId = logId;
+    this.callId = callId;
     this.raw = raw;
   }
 
@@ -126,7 +128,7 @@ export class ImageResult {
       model: raw.model ?? '',
       provider: raw.provider ?? '',
       priceUsd: meta.price?.usd ?? null,
-      logId: meta.log_id ?? null,
+      callId: meta.call_id ?? raw.call_id ?? null,
       raw,
     });
   }

@@ -45,7 +45,7 @@ class ChatResult:
     provider: str
     usage: Usage
     price_usd: float | None
-    log_id: int | None
+    call_id: str | None
     tool_calls: Any | None
     raw: dict[str, Any]
 
@@ -59,7 +59,7 @@ class ChatResult:
             provider=raw.get("provider", ""),
             usage=Usage(input=usage_raw.get("input"), output=usage_raw.get("output")),
             price_usd=(meta.get("price") or {}).get("usd"),
-            log_id=meta.get("log_id", raw.get("log_id")),
+            call_id=meta.get("call_id", raw.get("call_id")),
             tool_calls=raw.get("tool_calls"),
             raw=raw,
         )
@@ -75,6 +75,7 @@ class ChatItemResult:
     provider: str | None
     usage: Usage | None
     price_usd: float | None
+    call_id: str | None
     error: str | None
     raw: dict[str, Any]
 
@@ -89,6 +90,7 @@ class ChatItemResult:
             provider=raw.get("provider"),
             usage=Usage(input=usage_raw.get("input"), output=usage_raw.get("output")) if usage_raw else None,
             price_usd=(meta.get("price") or {}).get("usd"),
+            call_id=meta.get("call_id", raw.get("call_id")),
             error=raw.get("error"),
             raw=raw,
         )
@@ -120,7 +122,7 @@ class ImageResult:
     model: str
     provider: str
     price_usd: float | None
-    log_id: int | None
+    call_id: str | None
     raw: dict[str, Any]
 
     @classmethod
@@ -131,7 +133,7 @@ class ImageResult:
             model=raw.get("model", ""),
             provider=raw.get("provider", ""),
             price_usd=(meta.get("price") or {}).get("usd"),
-            log_id=meta.get("log_id"),
+            call_id=meta.get("call_id", raw.get("call_id")),
             raw=raw,
         )
 

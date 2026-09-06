@@ -107,14 +107,14 @@ describe('typed results', () => {
   test('chat returns a ChatResult', async () => {
     const body = {
       content: 'hi there', model: 'Claude Sonnet 4.5', provider: 'edenai',
-      usage: { input: 10, output: 5 }, meta: { price: { usd: 0.001 }, log_id: 42 },
+      usage: { input: 10, output: 5 }, meta: { price: { usd: 0.001 }, call_id: 'a'.repeat(64) },
     };
     const { client } = clientWith(200, body);
     const result = await client.chat([{ role: 'user', content: 'hi' }]);
     assert.equal(result.content, 'hi there');
     assert.equal(result.usage.input, 10);
     assert.equal(result.priceUsd, 0.001);
-    assert.equal(result.logId, 42);
+    assert.equal(result.callId, 'a'.repeat(64));
     assert.deepEqual(result.raw, body);
   });
 
@@ -268,5 +268,47 @@ describe('redeemTierCode', () => {
     assert.equal(response.account_id, 1);
     assert.equal(client.token, 'fire_sk_new');
     assert.equal(calls[0].url, 'https://fire.example.test/v1/billing/tier/redeem');
+  });
+});
+
+describe('call feedback', () => {
+  test('reportCall posts schema fields to v1/calls/{id}/report', async () => {
+    const id = 'a'.repeat(64);
+    const { client, calls } = clientWith(202, { status: 'received', call_id: id });
+    const out = await client.reportCall(id, 'made up a citation', 'hallucination', { excerpt: 'p. 42' });
+    assert.equal(calls[0].url, `https://fire.example.test/v1/calls/${id}/report`);
+    const body = JSON.parse(calls[0].init.body);
+    assert.equal(body.issue_type, 'hallucination');
+    assert.equal(body.excerpt, 'p. 42');
+    assert.equal(out.status, 'received');
+  });
+
+  test('rateCall posts score/dimension/tags to v1/calls/{id}/rate', async () => {
+    const id = 'b'.repeat(64);
+    const { client, calls } = clientWith(202, { status: 'received' });
+    await client.rateCall(id, 4.5, { dimension: 'speed', tags: ['oil emulations'] });
+    assert.equal(calls[0].url, `https://fire.example.test/v1/calls/${id}/rate`);
+    assert.deepEqual(JSON.parse(calls[0].init.body), { score: 4.5, dimension: 'speed', tags: ['oil emulations'] });
+  });
+
+  test('rankings sends facet query params', async () => {
+    const { client, calls } = clientWith(200, { rankings: [] });
+    await client.rankings({ dimension: 'speed', function: 'chat', minSamples: 5, sort: 'value' });
+    assert.equal(
+      calls[0].url,
+      'https://fire.example.test/v1/models/rankings?dimension=speed&function=chat&min_samples=5&sort=value',
+    );
+  });
+
+  test('rankingDimensions hits v1', async () => {
+    const { client, calls } = clientWith(200, { dimensions: [] });
+    await client.rankingDimensions();
+    assert.equal(calls[0].url, 'https://fire.example.test/v1/models/rankings/dimensions');
+  });
+
+  test('models facet filters go as query', async () => {
+    const { client, calls } = clientWith(200, { models: [] });
+    await client.models({ modality: 'image', function: 'image_edit' });
+    assert.equal(calls[0].url, 'https://fire.example.test/v1/models?modality=image&function=image_edit');
   });
 });

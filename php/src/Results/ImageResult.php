@@ -16,7 +16,7 @@ final class ImageResult
         public readonly string $model,
         public readonly string $provider,
         public readonly ?float $priceUsd,
-        public readonly ?int $logId,
+        public readonly ?string $callId,
         public readonly array $raw,
     ) {
     }
@@ -35,7 +35,7 @@ final class ImageResult
             model:    $raw['model'] ?? '',
             provider: $raw['provider'] ?? '',
             priceUsd: ($meta['price'] ?? [])['usd'] ?? null,
-            logId:    $meta['log_id'] ?? null,
+            callId:   $meta['call_id'] ?? $raw['call_id'] ?? null,
             raw:      $raw,
         );
     }

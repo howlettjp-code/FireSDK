@@ -1,6 +1,6 @@
 {
   "name": "@moduspromethean/fire-sdk",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "JS SDK for the Fire AI Inference API (L1 chat/image, L2 workflows, v2 multi-agent flows)",
   "type": "module",
   "license": "MIT",

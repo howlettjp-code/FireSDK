@@ -13,7 +13,7 @@ final class ChatResult
         public readonly string $provider,
         public readonly Usage $usage,
         public readonly ?float $priceUsd,
-        public readonly ?int $logId,
+        public readonly ?string $callId,
         public readonly mixed $toolCalls,
         /** @var array<string, mixed> Always the full original response — an escape hatch for anything not modeled above. */
         public readonly array $raw,
@@ -32,7 +32,7 @@ final class ChatResult
             provider:  $raw['provider'] ?? '',
             usage:     new Usage($usage['input'] ?? null, $usage['output'] ?? null),
             priceUsd:  ($meta['price'] ?? [])['usd'] ?? null,
-            logId:     $meta['log_id'] ?? $raw['log_id'] ?? null,
+            callId:    $meta['call_id'] ?? $raw['call_id'] ?? null,
             toolCalls: $raw['tool_calls'] ?? null,
             raw:       $raw,
         );

@@ -126,7 +126,7 @@ class TypedResultTest(unittest.TestCase):
     def test_chat_returns_chat_result(self):
         body = {
             "content": "hi there", "model": "Claude Sonnet 4.5", "provider": "edenai",
-            "usage": {"input": 10, "output": 5}, "meta": {"price": {"usd": 0.001}, "log_id": 42},
+            "usage": {"input": 10, "output": 5}, "meta": {"price": {"usd": 0.001}, "call_id": "a" * 64},
         }
         with self._patched(200, body):
             result = self.client.chat([{"role": "user", "content": "hi"}])
@@ -134,7 +134,7 @@ class TypedResultTest(unittest.TestCase):
         self.assertEqual(result.usage.input, 10)
         self.assertEqual(result.usage.output, 5)
         self.assertEqual(result.price_usd, 0.001)
-        self.assertEqual(result.log_id, 42)
+        self.assertEqual(result.call_id, "a" * 64)
         self.assertEqual(result.raw, body)
 
     def test_chat_parallel_returns_per_item_results(self):
@@ -304,3 +304,53 @@ class RedeemTierCodeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CallFeedbackTest(unittest.TestCase):
+    """report_call / rate_call / rankings — the per-call feedback surface
+    added alongside the API's call_id rollout (2026-09-02)."""
+
+    def setUp(self) -> None:
+        self.client = FireClient(token="fire_sk_test", base_url="https://fire.example.test")
+
+    def _patched(self, status_code: int, body: dict):
+        return patch.object(
+            self.client._session, "request", return_value=_mock_response(status_code, body)
+        )
+
+    def test_report_call_posts_schema_fields(self):
+        with self._patched(202, {"status": "received", "call_id": "a" * 64}) as mock_request:
+            out = self.client.report_call("a" * 64, "made up a citation", "hallucination", excerpt="p. 42")
+        url = mock_request.call_args.args[1]
+        self.assertEqual(url, "https://fire.example.test/v1/calls/" + "a" * 64 + "/report")
+        body = mock_request.call_args.kwargs["json"]
+        self.assertEqual(body["issue_type"], "hallucination")
+        self.assertEqual(body["excerpt"], "p. 42")
+        self.assertEqual(out["status"], "received")
+
+    def test_rate_call_posts_score_dimension_tags(self):
+        with self._patched(202, {"status": "received"}) as mock_request:
+            self.client.rate_call("b" * 64, 4.5, dimension="speed", tags=["oil emulations"])
+        url = mock_request.call_args.args[1]
+        self.assertEqual(url, "https://fire.example.test/v1/calls/" + "b" * 64 + "/rate")
+        body = mock_request.call_args.kwargs["json"]
+        self.assertEqual(body, {"score": 4.5, "dimension": "speed", "tags": ["oil emulations"]})
+
+    def test_rankings_sends_facet_query(self):
+        with self._patched(200, {"rankings": []}) as mock_request:
+            self.client.rankings(dimension="speed", function="chat", min_samples=5, sort="value")
+        url = mock_request.call_args.args[1]
+        self.assertEqual(url, "https://fire.example.test/v1/models/rankings")
+        params = mock_request.call_args.kwargs["params"]
+        self.assertEqual(params, {"dimension": "speed", "function": "chat", "min_samples": 5, "sort": "value"})
+
+    def test_ranking_dimensions_hits_v1(self):
+        with self._patched(200, {"dimensions": []}) as mock_request:
+            self.client.ranking_dimensions()
+        self.assertEqual(mock_request.call_args.args[1], "https://fire.example.test/v1/models/rankings/dimensions")
+
+    def test_models_facet_filters_go_as_query(self):
+        with self._patched(200, {"models": []}) as mock_request:
+            self.client.models(modality="image", function="image_edit")
+        params = mock_request.call_args.kwargs["params"]
+        self.assertEqual(params, {"modality": "image", "function": "image_edit"})

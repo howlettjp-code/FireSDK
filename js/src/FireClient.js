@@ -121,13 +121,73 @@ export class FireClient {
   }
 
   /** Every active, onboarded model deployment, including each species'
-   * `strengths` (e.g. "reasoning") and `capabilities`. */
-  models() {
-    return this._request('GET', 'v1/models');
+   * `strengths` (e.g. "reasoning"), `capabilities`, facet columns
+   * (`modality` in/out sets, `functions`), and a sparse per-dimension
+   * `ratings` summary. Optional facet filters: `modality` matches what
+   * the model *produces* (text|image|audio); `function` uses the
+   * call-type vocabulary (chat|image_generation|image_edit|upscale|speech). */
+  models({ modality, function: fn, tier } = {}) {
+    const query = {};
+    if (modality !== undefined) query.modality = modality;
+    if (fn !== undefined) query.function = fn;
+    if (tier !== undefined) query.tier = tier;
+    return this._request('GET', 'v1/models', { query });
   }
 
   usage() {
     return this._request('GET', 'v1/usage');
+  }
+
+  // ── call feedback — report / rate / rankings ────────────────────────
+
+  /**
+   * POST /calls/{callId}/report — report a problem with a call you made,
+   * identified by the `callId` its result carried (e.g.
+   * `ChatResult.callId`). `issueType` branches on the call's type — see
+   * the capabilities doc for the per-type enums. Extra per-type fields
+   * (`expected`, `excerpt`, `region`, `timestamp_ms`) go in `fields`.
+   * Every report is recorded and triaged server-side.
+   */
+  reportCall(callId, description, issueType, { category, ...fields } = {}) {
+    const json = { description, issue_type: issueType, ...fields };
+    if (category !== undefined) json.category = category;
+    return this._request('POST', `v1/calls/${callId}/report`, { json });
+  }
+
+  /**
+   * POST /calls/{callId}/rate — rate a call 1-5, optionally on a named
+   * dimension (default: overall — see rankingDimensions()). Unknown
+   * `tags` propose new dimensions for curation.
+   */
+  rateCall(callId, score, { dimension, tags, comment } = {}) {
+    const json = { score };
+    if (dimension !== undefined) json.dimension = dimension;
+    if (tags !== undefined) json.tags = tags;
+    if (comment !== undefined) json.comment = comment;
+    return this._request('POST', `v1/calls/${callId}/rate`, { json });
+  }
+
+  /**
+   * GET /models/rankings — models ranked by a rating dimension's
+   * aggregate customer score. Every row carries `sampleCount` data
+   * (`sample_count`) beside `score`; `value` (score ÷ published price)
+   * is null where no honest flat price exists. `sort` is 'score'
+   * (default) or 'value'.
+   */
+  rankings({ dimension, modality, function: fn, tier, minSamples, sort } = {}) {
+    const query = {};
+    if (dimension !== undefined) query.dimension = dimension;
+    if (modality !== undefined) query.modality = modality;
+    if (fn !== undefined) query.function = fn;
+    if (tier !== undefined) query.tier = tier;
+    if (minSamples !== undefined) query.min_samples = minSamples;
+    if (sort !== undefined) query.sort = sort;
+    return this._request('GET', 'v1/models/rankings', { query });
+  }
+
+  /** GET /models/rankings/dimensions — the active rating vocabulary. */
+  rankingDimensions() {
+    return this._request('GET', 'v1/models/rankings/dimensions');
   }
 
   // ── L1 — chat ────────────────────────────────────────────────────────

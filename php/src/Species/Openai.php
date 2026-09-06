@@ -8,8 +8,8 @@ namespace ModusPromethean\FireSdk\Species;
  * GENERATED FILE — do not edit by hand.
  *
  * Run `python3 scripts/generate_species.py` (from the repo root) to
- * refresh. Source: GET /v1/capabilities — 31 species across
- * 13 families as of the last regenerate.
+ * refresh. Source: GET /v1/capabilities — 38 species across
+ * 15 families as of the last regenerate.
  */
 final class Openai
 {
@@ -22,4 +22,5 @@ final class Openai
     public const GPT_IMAGE_1_5 = 'gpt-image-1-5';
     public const O3_MINI = 'o3-mini';
     public const O4_MINI = 'o4-mini';
+    public const OPENAI_TTS_1 = 'openai-tts-1';
 }

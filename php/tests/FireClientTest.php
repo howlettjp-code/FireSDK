@@ -141,14 +141,14 @@ final class FireClientTest extends TestCase
     {
         $body = [
             'content' => 'hi there', 'model' => 'Claude Sonnet 4.5', 'provider' => 'edenai',
-            'usage' => ['input' => 10, 'output' => 5], 'meta' => ['price' => ['usd' => 0.001], 'log_id' => 42],
+            'usage' => ['input' => 10, 'output' => 5], 'meta' => ['price' => ['usd' => 0.001], 'call_id' => str_repeat('a', 64)],
         ];
         [$client] = $this->clientWithFakeTransport($this->jsonResponse(200, $body));
         $result = $client->chat([['role' => 'user', 'content' => 'hi']]);
         $this->assertSame('hi there', $result->content);
         $this->assertSame(10, $result->usage->input);
         $this->assertSame(0.001, $result->priceUsd);
-        $this->assertSame(42, $result->logId);
+        $this->assertSame(str_repeat('a', 64), $result->callId);
         $this->assertSame($body, $result->raw);
     }
 
@@ -317,5 +317,55 @@ final class FireClientTest extends TestCase
 
         $this->assertSame('fire_sk_new', $body['token']);
         $this->assertSame('https://fire.example.test/v1/billing/tier/redeem', $calls[0]['url']);
+    }
+
+    // ── call feedback — report / rate / rankings ─────────────────────────
+
+    public function testReportCallPostsSchemaFields(): void
+    {
+        $id = str_repeat('a', 64);
+        [$client, $calls] = $this->clientWithFakeTransport($this->jsonResponse(202, ['status' => 'received', 'call_id' => $id]));
+        $out = $client->reportCall($id, 'made up a citation', 'hallucination', fields: ['excerpt' => 'p. 42']);
+        $this->assertSame("https://fire.example.test/v1/calls/{$id}/report", $calls[0]['url']);
+        $body = json_decode($calls[0]['jsonBody'], true);
+        $this->assertSame('hallucination', $body['issue_type']);
+        $this->assertSame('p. 42', $body['excerpt']);
+        $this->assertSame('received', $out['status']);
+    }
+
+    public function testRateCallPostsScoreDimensionTags(): void
+    {
+        $id = str_repeat('b', 64);
+        [$client, $calls] = $this->clientWithFakeTransport($this->jsonResponse(202, ['status' => 'received']));
+        $client->rateCall($id, 4.5, dimension: 'speed', tags: ['oil emulations']);
+        $this->assertSame("https://fire.example.test/v1/calls/{$id}/rate", $calls[0]['url']);
+        $this->assertSame(
+            ['score' => 4.5, 'dimension' => 'speed', 'tags' => ['oil emulations']],
+            json_decode($calls[0]['jsonBody'], true),
+        );
+    }
+
+    public function testRankingsSendsFacetQuery(): void
+    {
+        [$client, $calls] = $this->clientWithFakeTransport($this->jsonResponse(200, ['rankings' => []]));
+        $client->rankings(dimension: 'speed', function: 'chat', minSamples: 5, sort: 'value');
+        $this->assertSame(
+            'https://fire.example.test/v1/models/rankings?dimension=speed&function=chat&min_samples=5&sort=value',
+            $calls[0]['url'],
+        );
+    }
+
+    public function testRankingDimensionsHitsV1(): void
+    {
+        [$client, $calls] = $this->clientWithFakeTransport($this->jsonResponse(200, ['dimensions' => []]));
+        $client->rankingDimensions();
+        $this->assertSame('https://fire.example.test/v1/models/rankings/dimensions', $calls[0]['url']);
+    }
+
+    public function testModelsFacetFiltersGoAsQuery(): void
+    {
+        [$client, $calls] = $this->clientWithFakeTransport($this->jsonResponse(200, ['models' => []]));
+        $client->models(modality: 'image', function: 'image_edit');
+        $this->assertSame('https://fire.example.test/v1/models?modality=image&function=image_edit', $calls[0]['url']);
     }
 }

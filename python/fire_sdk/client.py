@@ -113,13 +113,104 @@ class FireClient:
     def status(self) -> dict[str, Any]:
         return self._request("GET", "v1/status")
 
-    def models(self) -> dict[str, Any]:
+    def models(
+        self,
+        *,
+        modality: str | None = None,
+        function: str | None = None,
+        tier: str | None = None,
+    ) -> dict[str, Any]:
         """Every active, onboarded model deployment, including each
-        species' `strengths` (e.g. "reasoning") and `capabilities`."""
-        return self._request("GET", "v1/models")
+        species' `strengths` (e.g. "reasoning"), `capabilities`, facet
+        columns (`modality` in/out sets, `functions`), and a sparse
+        per-dimension `ratings` summary. Optional facet filters:
+        `modality` matches what the model *produces* (text|image|audio),
+        `function` uses the call-type vocabulary
+        (chat|image_generation|image_edit|upscale|speech)."""
+        params = {k: v for k, v in {"modality": modality, "function": function, "tier": tier}.items() if v is not None}
+        return self._request("GET", "v1/models", params=params or None)
 
     def usage(self) -> dict[str, Any]:
         return self._request("GET", "v1/usage")
+
+    # ── call feedback — report / rate / rankings ────────────────────────
+
+    def report_call(
+        self,
+        call_id: str,
+        description: str,
+        issue_type: str,
+        *,
+        category: str | None = None,
+        **fields: Any,
+    ) -> dict[str, Any]:
+        """POST /calls/{call_id}/report — report a problem with a call you
+        made, identified by the `call_id` its result carried (e.g.
+        ``ChatResult.call_id``). ``issue_type`` branches on the call's
+        type — see the API's capabilities doc for the per-type enums
+        (chat: hallucination|refusal|wrong_format|off_topic|slow|other,
+        ...). Extra per-type fields (``expected``, ``excerpt``,
+        ``region``, ``timestamp_ms``) go through as keyword args. Every
+        report is recorded and triaged server-side."""
+        body: dict[str, Any] = {"description": description, "issue_type": issue_type, **fields}
+        if category is not None:
+            body["category"] = category
+        return self._request("POST", f"v1/calls/{call_id}/report", json=body)
+
+    def rate_call(
+        self,
+        call_id: str,
+        score: float,
+        *,
+        dimension: str | None = None,
+        tags: list[str] | None = None,
+        comment: str | None = None,
+    ) -> dict[str, Any]:
+        """POST /calls/{call_id}/rate — rate a call 1-5, optionally on a
+        named dimension (default: overall; see
+        :meth:`ranking_dimensions`). Unknown ``tags`` propose new
+        dimensions for curation."""
+        body: dict[str, Any] = {"score": score}
+        if dimension is not None:
+            body["dimension"] = dimension
+        if tags is not None:
+            body["tags"] = tags
+        if comment is not None:
+            body["comment"] = comment
+        return self._request("POST", f"v1/calls/{call_id}/rate", json=body)
+
+    def rankings(
+        self,
+        *,
+        dimension: str | None = None,
+        modality: str | None = None,
+        function: str | None = None,
+        tier: str | None = None,
+        min_samples: int | None = None,
+        sort: str | None = None,
+    ) -> dict[str, Any]:
+        """GET /models/rankings — models ranked by a rating dimension's
+        aggregate customer score. Every row carries ``sample_count``
+        beside ``score``; ``value`` (score ÷ published price) is null
+        where no honest flat price exists. ``sort`` is ``score`` (default)
+        or ``value``."""
+        params = {
+            k: v
+            for k, v in {
+                "dimension": dimension,
+                "modality": modality,
+                "function": function,
+                "tier": tier,
+                "min_samples": min_samples,
+                "sort": sort,
+            }.items()
+            if v is not None
+        }
+        return self._request("GET", "v1/models/rankings", params=params or None)
+
+    def ranking_dimensions(self) -> dict[str, Any]:
+        """GET /models/rankings/dimensions — the active rating vocabulary."""
+        return self._request("GET", "v1/models/rankings/dimensions")
 
     # ── L1 — chat ────────────────────────────────────────────────────────
 

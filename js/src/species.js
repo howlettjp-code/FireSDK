@@ -1,11 +1,12 @@
 // GENERATED FILE — do not edit by hand.
 //
 // Run `python3 scripts/generate_species.py` (from the repo root) to
-// refresh. Source: GET /v1/capabilities — 31 species across
-// 13 families as of the last regenerate.
+// refresh. Source: GET /v1/capabilities — 38 species across
+// 15 families as of the last regenerate.
 
 export const Species = Object.freeze({
   alibaba: Object.freeze({
+    QWEN_EDIT_UNCENSORED: 'qwen-edit-uncensored',
     QWEN_IMAGE: 'qwen-image',
     Z_IMAGE_TURBO: 'z-image-turbo',
   }),
@@ -25,10 +26,17 @@ export const Species = Object.freeze({
     DEEPSEEK_CHAT: 'deepseek-chat',
     DEEPSEEK_REASONER: 'deepseek-reasoner',
   }),
+  elevenlabs: Object.freeze({
+    TTS_ELEVENLABS_TURBO_V2_5: 'tts-elevenlabs-turbo-v2-5',
+  }),
   google: Object.freeze({
     GEMINI_2_5_FLASH: 'gemini-2.5-flash',
     GEMINI_2_5_PRO: 'gemini-2.5-pro',
-    IMAGEN_4: 'imagen-4',
+    GOOGLE_TTS_NEURAL: 'google-tts-neural',
+    TTS_GEMINI_3_1_FLASH: 'tts-gemini-3-1-flash',
+  }),
+  hexgrad: Object.freeze({
+    TTS_KOKORO: 'tts-kokoro',
   }),
   illustrious: Object.freeze({
     WAI_ILLUSTRIOUS: 'wai-Illustrious',
@@ -54,6 +62,7 @@ export const Species = Object.freeze({
     GPT_IMAGE_1_5: 'gpt-image-1-5',
     O3_MINI: 'o3-mini',
     O4_MINI: 'o4-mini',
+    OPENAI_TTS_1: 'openai-tts-1',
   }),
   stabilityai: Object.freeze({
     SDXL: 'sdxl',
@@ -61,5 +70,7 @@ export const Species = Object.freeze({
   }),
   venice: Object.freeze({
     VENICE_UNCENSORED: 'venice-uncensored',
+    VENICE_UPSCALER: 'venice-upscaler',
+    VENICE_WEB_SEARCH: 'venice-web-search',
   }),
 });

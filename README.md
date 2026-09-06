@@ -19,6 +19,18 @@ example. Start with whichever matches your project; the concepts
 (capabilities discovery, chat, species, workflows, flows, error types)
 are identical across all three.
 
+> **1.1.0 (2026-09-06)** tracks the API's call-identity rollout:
+> `ChatResult`/`ImageResult` (and parallel items) now carry `call_id` /
+> `callId` — an opaque 64-hex handle — **replacing `log_id`/`logId`**,
+> which the API itself removed on 2026-09-02 (the old field could only
+> ever be `null` against current servers). New client methods:
+> `report_call`/`reportCall` (problem reports, recorded and triaged
+> server-side), `rate_call`/`rateCall` (1–5 ratings on named dimensions,
+> freeform tags propose new ones), `rankings` + `ranking_dimensions`/
+> `rankingDimensions` (models ranked per dimension, facet-filterable),
+> and facet filters on `models()` (`modality`/`function`/`tier`). The
+> species registry is regenerated against the 2026-09-06 catalog.
+
 > **1.0.0 (2026-08-03) is a breaking change from 0.x.** Result-bearing
 > calls now return typed objects instead of bare dicts/arrays/objects —
 > see "The object model" below, and each language's README for exact
@@ -28,7 +40,10 @@ are identical across all three.
 
 - **L1 — chat / image**: `chat()`, `chatParallel()`, `image()`. A single
   or multi-model completion, billed and logged per call. Returns
-  `ChatResult` / `ParallelChatResult` / `ImageResult`.
+  `ChatResult` / `ParallelChatResult` / `ImageResult`. Every result
+  carries a `call_id` — keep it to report a problem with or rate that
+  exact call later (`reportCall`/`rateCall`), and see `rankings()` for
+  the aggregate scores those ratings feed.
 - **Species** — the model taxonomy (family → genus → species) as a
   **generated**, navigable namespace (`Species.Anthropic.CLAUDE_SONNET_4_5`
   / `Species\Anthropic::CLAUDE_SONNET_4_5` / `Species.anthropic.CLAUDE_SONNET_4_5`)

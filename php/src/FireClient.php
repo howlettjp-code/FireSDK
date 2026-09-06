@@ -189,18 +189,108 @@ class FireClient
 
     /**
      * Every active, onboarded model deployment, including each species'
-     * `strengths` (e.g. "reasoning") and `capabilities`.
+     * `strengths` (e.g. "reasoning"), `capabilities`, facet columns
+     * (`modality` in/out sets, `functions`), and a sparse per-dimension
+     * `ratings` summary. Optional facet filters: $modality matches what
+     * the model *produces* (text|image|audio); $function uses the
+     * call-type vocabulary (chat|image_generation|image_edit|upscale|speech).
      * @return array<string, mixed>
      */
-    public function models(): array
+    public function models(?string $modality = null, ?string $function = null, ?string $tier = null): array
     {
-        return $this->request('GET', 'v1/models');
+        $query = array_filter(
+            ['modality' => $modality, 'function' => $function, 'tier' => $tier],
+            static fn ($v) => $v !== null,
+        );
+
+        return $this->request('GET', 'v1/models', query: $query ?: null);
     }
 
     /** @return array<string, mixed> */
     public function usage(): array
     {
         return $this->request('GET', 'v1/usage');
+    }
+
+    // ── call feedback — report / rate / rankings ────────────────────────
+
+    /**
+     * POST /calls/{callId}/report — report a problem with a call you
+     * made, identified by the callId its result carried (e.g.
+     * ChatResult::$callId). $issueType branches on the call's type — see
+     * the capabilities doc for the per-type enums. Extra per-type fields
+     * (expected, excerpt, region, timestamp_ms) go in $fields. Every
+     * report is recorded and triaged server-side.
+     * @param array<string, mixed> $fields
+     * @return array<string, mixed>
+     */
+    public function reportCall(string $callId, string $description, string $issueType, ?string $category = null, array $fields = []): array
+    {
+        $json = ['description' => $description, 'issue_type' => $issueType] + $fields;
+        if ($category !== null) {
+            $json['category'] = $category;
+        }
+
+        return $this->request('POST', "v1/calls/{$callId}/report", json: $json);
+    }
+
+    /**
+     * POST /calls/{callId}/rate — rate a call 1-5, optionally on a named
+     * dimension (default: overall — see rankingDimensions()). Unknown
+     * $tags propose new dimensions for curation.
+     * @param list<string>|null $tags
+     * @return array<string, mixed>
+     */
+    public function rateCall(string $callId, float $score, ?string $dimension = null, ?array $tags = null, ?string $comment = null): array
+    {
+        $json = ['score' => $score];
+        if ($dimension !== null) {
+            $json['dimension'] = $dimension;
+        }
+        if ($tags !== null) {
+            $json['tags'] = $tags;
+        }
+        if ($comment !== null) {
+            $json['comment'] = $comment;
+        }
+
+        return $this->request('POST', "v1/calls/{$callId}/rate", json: $json);
+    }
+
+    /**
+     * GET /models/rankings — models ranked by a rating dimension's
+     * aggregate customer score. Every row carries sample_count beside
+     * score; value (score ÷ published price) is null where no honest
+     * flat price exists. $sort is 'score' (default) or 'value'.
+     * @return array<string, mixed>
+     */
+    public function rankings(
+        ?string $dimension = null,
+        ?string $modality = null,
+        ?string $function = null,
+        ?string $tier = null,
+        ?int $minSamples = null,
+        ?string $sort = null,
+    ): array {
+        $query = array_filter([
+            'dimension'   => $dimension,
+            'modality'    => $modality,
+            'function'    => $function,
+            'tier'        => $tier,
+            'min_samples' => $minSamples,
+            'sort'        => $sort,
+        ], static fn ($v) => $v !== null);
+
+        return $this->request('GET', 'v1/models/rankings', query: $query ?: null);
+    }
+
+    /**
+     * GET /models/rankings/dimensions — the active rating vocabulary.
+     * @return array<string, mixed>
+     */
+    public function rankingDimensions(): array
+    {
+        return $this->request('GET', 'v1/models/rankings/dimensions');
     }
 
     // ── L1 — chat ────────────────────────────────────────────────────────

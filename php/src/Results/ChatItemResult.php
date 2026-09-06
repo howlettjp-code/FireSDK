@@ -14,6 +14,7 @@ final class ChatItemResult
         public readonly ?string $provider,
         public readonly ?Usage $usage,
         public readonly ?float $priceUsd,
+        public readonly ?string $callId,
         public readonly ?string $error,
         /** @var array<string, mixed> */
         public readonly array $raw,
@@ -33,6 +34,7 @@ final class ChatItemResult
             provider: $raw['provider'] ?? null,
             usage:    $usageRaw ? new Usage($usageRaw['input'] ?? null, $usageRaw['output'] ?? null) : null,
             priceUsd: ($meta['price'] ?? [])['usd'] ?? null,
+            callId:   $meta['call_id'] ?? $raw['call_id'] ?? null,
             error:    $raw['error'] ?? null,
             raw:      $raw,
         );
