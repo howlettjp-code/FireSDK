@@ -1,6 +1,6 @@
 # FireSDK (Python)
 
-A small Python client for the [Fire AI Inference API](https://fire.test1.prosaga.net/v1/capabilities)
+A small Python client for the [Fire AI Inference API](https://fire.prosaga.net/v1/capabilities)
 — model-agnostic chat/image completions (L1), canned server-side
 workflows (L2), and a data-driven, resumable multi-agent flow layer (v2).
 Built for LLM-agent and test-script use: synchronous, minimal
@@ -254,8 +254,9 @@ except FireConflictError as e:
 ## Environments
 
 ```python
-FireClient(token="...", base_url="https://fire.test1.prosaga.net")  # default
-FireClient(token="...", base_url="https://fire.prosaga.net")        # prod
+FireClient(token="...")                                              # prod (default)
+FireClient(token="...", base_url="https://fire.prosaga.net")        # prod, explicit
+FireClient(token="...", base_url="https://fire.test1.prosaga.net")  # test
 ```
 
 `base_url` is the bare host — `v1` and `v2` are sibling path prefixes on

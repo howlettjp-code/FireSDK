@@ -1,6 +1,6 @@
 # FireSDK (JS)
 
-A small JavaScript client for the [Fire AI Inference API](https://fire.test1.prosaga.net/v1/capabilities)
+A small JavaScript client for the [Fire AI Inference API](https://fire.prosaga.net/v1/capabilities)
 — model-agnostic chat/image completions (L1), canned server-side
 workflows (L2), and a data-driven, resumable multi-agent flow layer (v2).
 Zero dependencies (native `fetch`, Node 18+). ESM only (`"type": "module"`).

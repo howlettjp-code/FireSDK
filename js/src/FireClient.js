@@ -10,7 +10,7 @@ import {
 } from './errors.js';
 import { ChatResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult } from './results.js';
 
-export const DEFAULT_BASE_URL = 'https://fire.test1.prosaga.net';
+export const DEFAULT_BASE_URL = 'https://fire.prosaga.net';
 
 /**
  * A Fire API client bound to one token. Covers L1 (chat/image), L2
@@ -30,9 +30,9 @@ export class FireClient {
    *   the two endpoints that don't require one.
    * @param {string} [opts.baseUrl] Root URL, no version suffix — v1 and v2
    *   are sibling path prefixes, not nested (`.../v1/chat`,
-   *   `.../v2/flows/run` on the same host). Defaults to Fire's test1
-   *   environment; pass `https://fire.prosaga.net` once your token/flows
-   *   are promoted to prod.
+   *   `.../v2/flows/run` on the same host). Defaults to Fire prod
+   *   (`https://fire.prosaga.net`); pass `https://fire.test1.prosaga.net`
+   *   for the test environment.
    * @param {number} [opts.timeout] Per-request timeout in milliseconds.
    * @param {typeof fetch} [opts.fetchImpl] Internal — lets tests substitute
    *   a fake fetch. Not for normal use.

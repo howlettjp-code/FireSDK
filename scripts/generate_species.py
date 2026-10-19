@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_BASE_URL = "https://fire.test1.prosaga.net"
+DEFAULT_BASE_URL = "https://fire.prosaga.net"
 
 
 def fetch_models(base_url: str) -> list[dict[str, Any]]:

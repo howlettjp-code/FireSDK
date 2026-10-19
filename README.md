@@ -1,6 +1,6 @@
 # FireSDK
 
-Client libraries for the [Fire AI Inference API](https://fire.test1.prosaga.net/v1/capabilities)
+Client libraries for the [Fire AI Inference API](https://fire.prosaga.net/v1/capabilities)
 — model-agnostic chat/image completions (L1), canned server-side
 workflows (L2), and a data-driven, resumable multi-agent flow layer (v2).
 Three languages, one shape: every method mirrors the same method across

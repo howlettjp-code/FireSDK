@@ -354,3 +354,10 @@ class CallFeedbackTest(unittest.TestCase):
             self.client.models(modality="image", function="image_edit")
         params = mock_request.call_args.kwargs["params"]
         self.assertEqual(params, {"modality": "image", "function": "image_edit"})
+
+
+class DefaultBaseUrlTests(unittest.TestCase):
+    def test_default_is_prod(self):
+        # Regression (T-1464): 1.1.0 defaulted to the test1 server, so students
+        # with prod tokens got auth failures unless they passed base_url.
+        self.assertEqual(FireClient(token="x").base_url, "https://fire.prosaga.net")

@@ -28,7 +28,7 @@ from .exceptions import (
 )
 from .results import ChatResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult
 
-DEFAULT_BASE_URL = "https://fire.test1.prosaga.net"
+DEFAULT_BASE_URL = "https://fire.prosaga.net"
 
 
 class FireClient:
@@ -40,9 +40,9 @@ class FireClient:
             endpoints that don't require one.
         base_url: Root URL, no version suffix — v1 and v2 are sibling
             path prefixes, not nested (``.../v1/chat``, ``.../v2/flows/run``
-            on the same host). Defaults to Fire's test1 environment; pass
-            ``https://fire.prosaga.net`` once your token/flows are
-            promoted to prod.
+            on the same host). Defaults to Fire prod
+            (``https://fire.prosaga.net``); pass
+            ``https://fire.test1.prosaga.net`` for the test environment.
         timeout: Per-request timeout in seconds.
     """
 

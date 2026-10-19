@@ -31,7 +31,7 @@ use ModusPromethean\FireSdk\Results\WorkflowResult;
  */
 class FireClient
 {
-    public const DEFAULT_BASE_URL = 'https://fire.test1.prosaga.net';
+    public const DEFAULT_BASE_URL = 'https://fire.prosaga.net';
 
     private readonly string $baseUrl;
 
@@ -44,8 +44,9 @@ class FireClient
      *     endpoints that don't require one.
      * @param string $baseUrl Root URL, no version suffix — v1 and v2 are
      *     sibling path prefixes, not nested (`.../v1/chat`, `.../v2/flows/run`
-     *     on the same host). Defaults to Fire's test1 environment; pass
-     *     `https://fire.prosaga.net` once your token/flows are promoted to prod.
+     *     on the same host). Defaults to Fire prod
+     *     (`https://fire.prosaga.net`); pass `https://fire.test1.prosaga.net`
+     *     for the test environment.
      * @param float $timeout Per-request timeout in seconds.
      * @param (callable(string, string, array<string, string>, ?string): array{status: int, body: string})|null $transport
      *     Internal — lets tests substitute the real cURL call with a fake
