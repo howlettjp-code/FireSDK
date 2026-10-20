@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fire-sdk"
-version = "1.1.0"
+version = "1.1.1"
 description = "Python SDK for the Fire AI Inference API (L1 chat/image, L2 workflows, v2 multi-agent flows)"
 readme = "README.md"
 requires-python = ">=3.10"
