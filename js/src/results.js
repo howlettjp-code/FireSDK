@@ -164,6 +164,61 @@ export class EmbeddingResult {
   }
 }
 
+/** POST /v1/decide — typed answers keyed by question name (noul / choice / score). */
+export class DecisionResult {
+  constructor({ answers, model, provider, usage, priceUsd, callId, raw }) {
+    this.answers = answers;
+    this.model = model;
+    this.provider = provider;
+    this.usage = usage;
+    this.priceUsd = priceUsd;
+    this.callId = callId;
+    this.raw = raw;
+  }
+
+  static fromRaw(raw) {
+    const usage = raw.usage ?? {};
+    const meta = raw.meta ?? {};
+    return new DecisionResult({
+      answers: raw.answers ?? {},
+      model: raw.model ?? '',
+      provider: raw.provider ?? '',
+      usage: new Usage(usage.input_tokens, usage.output_tokens),
+      priceUsd: meta.price?.usd ?? null,
+      callId: meta.call_id ?? raw.call_id ?? null,
+      raw,
+    });
+  }
+}
+
+/** POST /v1/transcribe. language/duration are null when the provider omits them. */
+export class TranscriptionResult {
+  constructor({ text, language, duration, model, provider, priceUsd, callId, raw }) {
+    this.text = text;
+    this.language = language;
+    this.duration = duration;
+    this.model = model;
+    this.provider = provider;
+    this.priceUsd = priceUsd;
+    this.callId = callId;
+    this.raw = raw;
+  }
+
+  static fromRaw(raw) {
+    const meta = raw.meta ?? {};
+    return new TranscriptionResult({
+      text: raw.text ?? '',
+      language: raw.language ?? null,
+      duration: raw.duration ?? null,
+      model: raw.model ?? '',
+      provider: raw.provider ?? '',
+      priceUsd: meta.price?.usd ?? null,
+      callId: meta.call_id ?? raw.call_id ?? null,
+      raw,
+    });
+  }
+}
+
 // ─── L2 ────────────────────────────────────────────────────────────────
 
 /** POST /v1/workflows/{slug}. Deliberately thin — see module docstring. */

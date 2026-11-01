@@ -13,12 +13,14 @@ export {
 export {
   ChatItemResult,
   ChatResult,
+  DecisionResult,
   EmbeddingResult,
   FlowRun,
   FlowStep,
   ImageFile,
   ImageResult,
   ParallelChatResult,
+  TranscriptionResult,
   Usage,
   WorkflowResult,
 } from './results.js';

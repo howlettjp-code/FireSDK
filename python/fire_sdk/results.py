@@ -168,6 +168,66 @@ class EmbeddingResult:
         )
 
 
+@dataclass(frozen=True)
+class DecisionResult:
+    """POST /v1/decide — typed answers keyed by question name.
+
+    Each answer dict carries ``type`` plus ``noul`` (yes-probability),
+    ``choice``/``confidence``/``probabilities``, or ``score``/``confidence``/
+    ``legend``/``probabilities`` depending on the question type.
+    """
+
+    answers: dict[str, dict[str, Any]]
+    model: str
+    provider: str
+    usage: Usage
+    price_usd: float | None
+    call_id: str | None
+    raw: dict[str, Any]
+
+    @classmethod
+    def _from_raw(cls, raw: dict[str, Any]) -> DecisionResult:
+        usage_raw = raw.get("usage") or {}
+        meta = raw.get("meta") or {}
+        return cls(
+            answers=raw.get("answers") or {},
+            model=raw.get("model", ""),
+            provider=raw.get("provider", ""),
+            usage=Usage(input=usage_raw.get("input_tokens"), output=usage_raw.get("output_tokens")),
+            price_usd=(meta.get("price") or {}).get("usd"),
+            call_id=meta.get("call_id", raw.get("call_id")),
+            raw=raw,
+        )
+
+
+@dataclass(frozen=True)
+class TranscriptionResult:
+    """POST /v1/transcribe. ``language``/``duration`` are None when the provider omits them."""
+
+    text: str
+    language: str | None
+    duration: float | None
+    model: str
+    provider: str
+    price_usd: float | None
+    call_id: str | None
+    raw: dict[str, Any]
+
+    @classmethod
+    def _from_raw(cls, raw: dict[str, Any]) -> TranscriptionResult:
+        meta = raw.get("meta") or {}
+        return cls(
+            text=raw.get("text", ""),
+            language=raw.get("language"),
+            duration=raw.get("duration"),
+            model=raw.get("model", ""),
+            provider=raw.get("provider", ""),
+            price_usd=(meta.get("price") or {}).get("usd"),
+            call_id=meta.get("call_id", raw.get("call_id")),
+            raw=raw,
+        )
+
+
 # ─── L2 ──────────────────────────────────────────────────────────────────
 
 

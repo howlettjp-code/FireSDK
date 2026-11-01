@@ -8,7 +8,7 @@ import {
   FireTimeoutError,
   FireValidationError,
 } from './errors.js';
-import { ChatResult, EmbeddingResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult } from './results.js';
+import { ChatResult, DecisionResult, EmbeddingResult, FlowRun, ImageResult, ParallelChatResult, TranscriptionResult, WorkflowResult } from './results.js';
 
 export const DEFAULT_BASE_URL = 'https://fire.prosaga.net';
 
@@ -229,6 +229,26 @@ export class FireClient {
     if (speciesName !== undefined) body.species_name = speciesName;
     if (dimensions !== undefined) body.dimensions = dimensions;
     return EmbeddingResult.fromRaw(await this._request('POST', 'v1/embed', { json: body }));
+  }
+
+  // ── L1 — decide / transcribe ────────────────────────────────────────
+
+  /** POST /decide — typed answers (noul / choice / score) about `state`, one per named question. */
+  async decide(state, questions, { speciesName } = {}) {
+    const body = { state, questions };
+    if (speciesName !== undefined) body.species_name = speciesName;
+    return DecisionResult.fromRaw(await this._request('POST', 'v1/decide', { json: body }));
+  }
+
+  /**
+   * POST /transcribe — speech-to-text for one clip. `audio` is an https URL, a
+   * data:audio/...;base64, URL, raw base64, or {url}. Keep clips under ~25MB.
+   */
+  async transcribe(audio, { speciesName, language } = {}) {
+    const body = { audio };
+    if (speciesName !== undefined) body.species_name = speciesName;
+    if (language !== undefined) body.language = language;
+    return TranscriptionResult.fromRaw(await this._request('POST', 'v1/transcribe', { json: body }));
   }
 
   // ── L1 — image ──────────────────────────────────────────────────────

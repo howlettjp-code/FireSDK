@@ -155,6 +155,28 @@ describe('typed results', () => {
     assert.equal(result.callId, 'c1');
   });
 
+  test('decide returns answers', async () => {
+    const body = {
+      answers: { angry: { type: 'noul', noul: 0.9 } }, usage: { input_tokens: 12, output_tokens: 3 },
+      model: 'Jev', provider: 'edenai', meta: { price: { usd: 2e-5 }, call_id: 'c2' },
+    };
+    const { client, calls } = clientWith(200, body);
+    const result = await client.decide('grr', { angry: { type: 'noul' } });
+    assert.equal(calls[0].url, 'https://fire.example.test/v1/decide');
+    assert.equal(result.answers.angry.noul, 0.9);
+    assert.equal(result.usage.input, 12);
+    assert.equal(result.callId, 'c2');
+  });
+
+  test('transcribe returns text', async () => {
+    const body = { text: 'hello', language: null, duration: null, model: 'W', provider: 'edenai', meta: { price: { usd: 1e-4 }, call_id: 'c3' } };
+    const { client, calls } = clientWith(200, body);
+    const result = await client.transcribe('https://x/a.mp3', { language: 'en' });
+    assert.equal(calls[0].url, 'https://fire.example.test/v1/transcribe');
+    assert.equal(result.text, 'hello');
+    assert.equal(result.callId, 'c3');
+  });
+
   test('runWorkflow returns a thin WorkflowResult', async () => {
     const body = { anything: 'the workflow wants to return' };
     const { client } = clientWith(200, body);

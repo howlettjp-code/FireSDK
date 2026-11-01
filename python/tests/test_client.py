@@ -173,6 +173,32 @@ class TypedResultTest(unittest.TestCase):
         self.assertEqual(result.usage.input, 9)
         self.assertEqual(result.call_id, "c1")
 
+    def test_decide_returns_answers(self):
+        body = {
+            "answers": {"angry": {"type": "noul", "noul": 0.9}},
+            "usage": {"input_tokens": 12, "output_tokens": 3},
+            "model": "Jev (TypeSafe)", "provider": "edenai", "call_id": "c2",
+            "meta": {"price": {"usd": 2e-5}, "call_id": "c2"},
+        }
+        qs = {"angry": {"type": "noul", "instructions": "Is it angry?"}}
+        with self._patched(200, body) as mock_request:
+            result = self.client.decide("grr", qs)
+        self.assertEqual(mock_request.call_args.args[1], "https://fire.example.test/v1/decide")
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"state": "grr", "questions": qs})
+        self.assertEqual(result.answers["angry"]["noul"], 0.9)
+        self.assertEqual(result.usage.input, 12)
+        self.assertEqual(result.call_id, "c2")
+
+    def test_transcribe_returns_text(self):
+        body = {"text": "hello", "language": None, "duration": None, "model": "Whisper", "provider": "edenai",
+                "meta": {"price": {"usd": 1e-4}, "call_id": "c3"}}
+        with self._patched(200, body) as mock_request:
+            result = self.client.transcribe("https://x/a.mp3", language="en")
+        self.assertEqual(mock_request.call_args.args[1], "https://fire.example.test/v1/transcribe")
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"audio": "https://x/a.mp3", "language": "en"})
+        self.assertEqual(result.text, "hello")
+        self.assertEqual(result.call_id, "c3")
+
     def test_run_workflow_returns_thin_workflow_result(self):
         body = {"anything": "the workflow wants to return"}
         with self._patched(200, body):

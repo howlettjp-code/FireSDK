@@ -14,9 +14,11 @@ use ModusPromethean\FireSdk\Exceptions\FireTimeoutError;
 use ModusPromethean\FireSdk\Exceptions\FireValidationError;
 use ModusPromethean\FireSdk\Results\ChatResult;
 use ModusPromethean\FireSdk\Results\FlowRun;
+use ModusPromethean\FireSdk\Results\DecisionResult;
 use ModusPromethean\FireSdk\Results\EmbeddingResult;
 use ModusPromethean\FireSdk\Results\ImageResult;
 use ModusPromethean\FireSdk\Results\ParallelChatResult;
+use ModusPromethean\FireSdk\Results\TranscriptionResult;
 use ModusPromethean\FireSdk\Results\WorkflowResult;
 
 /**
@@ -353,6 +355,37 @@ class FireClient
         if ($dimensions !== null) $body['dimensions'] = $dimensions;
 
         return EmbeddingResult::fromRaw($this->request('POST', 'v1/embed', json: $body));
+    }
+
+    // ── L1 — decide / transcribe ────────────────────────────────────────
+
+    /**
+     * POST /decide — typed answers (noul / choice / score) about $state, one per named question.
+     *
+     * @param string|array<mixed> $state
+     * @param array<string, array<string, mixed>> $questions
+     */
+    public function decide(string|array $state, array $questions, ?string $speciesName = null): DecisionResult
+    {
+        $body = ['state' => $state, 'questions' => $questions];
+        if ($speciesName !== null) $body['species_name'] = $speciesName;
+
+        return DecisionResult::fromRaw($this->request('POST', 'v1/decide', json: $body));
+    }
+
+    /**
+     * POST /transcribe — speech-to-text for one clip. $audio is an https URL, a
+     * data:audio/...;base64, URL, raw base64, or ['url' => ...]. Keep clips under ~25MB.
+     *
+     * @param string|array<string, string> $audio
+     */
+    public function transcribe(string|array $audio, ?string $speciesName = null, ?string $language = null): TranscriptionResult
+    {
+        $body = ['audio' => $audio];
+        if ($speciesName !== null) $body['species_name'] = $speciesName;
+        if ($language !== null) $body['language'] = $language;
+
+        return TranscriptionResult::fromRaw($this->request('POST', 'v1/transcribe', json: $body));
     }
 
     // ── L1 — image ──────────────────────────────────────────────────────

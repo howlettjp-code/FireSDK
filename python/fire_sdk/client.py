@@ -26,7 +26,7 @@ from .exceptions import (
     FireTimeoutError,
     FireValidationError,
 )
-from .results import ChatResult, EmbeddingResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult
+from .results import ChatResult, DecisionResult, EmbeddingResult, FlowRun, ImageResult, ParallelChatResult, TranscriptionResult, WorkflowResult
 
 DEFAULT_BASE_URL = "https://fire.prosaga.net"
 
@@ -283,6 +283,39 @@ class FireClient:
         if dimensions is not None:
             body["dimensions"] = dimensions
         return EmbeddingResult._from_raw(self._request("POST", "v1/embed", json=body))
+
+    # ── L1 — decide / transcribe ────────────────────────────────────────
+
+    def decide(
+        self,
+        state: str | dict[str, Any] | list[Any],
+        questions: dict[str, dict[str, Any]],
+        *,
+        species_name: str | None = None,
+    ) -> DecisionResult:
+        """POST /decide — typed answers (noul / choice / score) about ``state``,
+        one per named question, with the probability behind each."""
+        body: dict[str, Any] = {"state": state, "questions": questions}
+        if species_name is not None:
+            body["species_name"] = species_name
+        return DecisionResult._from_raw(self._request("POST", "v1/decide", json=body))
+
+    def transcribe(
+        self,
+        audio: str | dict[str, str],
+        *,
+        species_name: str | None = None,
+        language: str | None = None,
+    ) -> TranscriptionResult:
+        """POST /transcribe — speech-to-text for one clip. ``audio`` is an https
+        URL, a ``data:audio/...;base64,`` URL, raw base64, or ``{"url": ...}``.
+        Keep clips under ~25MB; Fire does no chunking."""
+        body: dict[str, Any] = {"audio": audio}
+        if species_name is not None:
+            body["species_name"] = species_name
+        if language is not None:
+            body["language"] = language
+        return TranscriptionResult._from_raw(self._request("POST", "v1/transcribe", json=body))
 
     # ── L2 — workflows ───────────────────────────────────────────────────
 
