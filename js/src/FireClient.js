@@ -8,7 +8,7 @@ import {
   FireTimeoutError,
   FireValidationError,
 } from './errors.js';
-import { ChatResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult } from './results.js';
+import { ChatResult, EmbeddingResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult } from './results.js';
 
 export const DEFAULT_BASE_URL = 'https://fire.prosaga.net';
 
@@ -219,6 +219,16 @@ export class FireClient {
    * @param {object[]} requests */
   async chatParallel(requests) {
     return ParallelChatResult.fromRaw(await this._request('POST', 'v1/chat/parallel', { json: { requests } }));
+  }
+
+  // ── L1 — embed ──────────────────────────────────────────────────────
+
+  /** POST /embed — text embeddings. A single string still yields a list of one vector. */
+  async embed(input, { speciesName, dimensions } = {}) {
+    const body = { input };
+    if (speciesName !== undefined) body.species_name = speciesName;
+    if (dimensions !== undefined) body.dimensions = dimensions;
+    return EmbeddingResult.fromRaw(await this._request('POST', 'v1/embed', { json: body }));
   }
 
   // ── L1 — image ──────────────────────────────────────────────────────

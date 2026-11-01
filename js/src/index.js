@@ -13,6 +13,7 @@ export {
 export {
   ChatItemResult,
   ChatResult,
+  EmbeddingResult,
   FlowRun,
   FlowStep,
   ImageFile,

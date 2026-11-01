@@ -14,6 +14,7 @@ use ModusPromethean\FireSdk\Exceptions\FireTimeoutError;
 use ModusPromethean\FireSdk\Exceptions\FireValidationError;
 use ModusPromethean\FireSdk\Results\ChatResult;
 use ModusPromethean\FireSdk\Results\FlowRun;
+use ModusPromethean\FireSdk\Results\EmbeddingResult;
 use ModusPromethean\FireSdk\Results\ImageResult;
 use ModusPromethean\FireSdk\Results\ParallelChatResult;
 use ModusPromethean\FireSdk\Results\WorkflowResult;
@@ -336,6 +337,22 @@ class FireClient
     public function chatParallel(array $requests): ParallelChatResult
     {
         return ParallelChatResult::fromRaw($this->request('POST', 'v1/chat/parallel', json: ['requests' => $requests]));
+    }
+
+    // ── L1 — embed ──────────────────────────────────────────────────────
+
+    /**
+     * POST /embed — text embeddings. A single string still yields a list of one vector.
+     *
+     * @param string|list<string> $input
+     */
+    public function embed(string|array $input, ?string $speciesName = null, ?int $dimensions = null): EmbeddingResult
+    {
+        $body = ['input' => $input];
+        if ($speciesName !== null) $body['species_name'] = $speciesName;
+        if ($dimensions !== null) $body['dimensions'] = $dimensions;
+
+        return EmbeddingResult::fromRaw($this->request('POST', 'v1/embed', json: $body));
     }
 
     // ── L1 — image ──────────────────────────────────────────────────────

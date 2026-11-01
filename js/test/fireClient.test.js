@@ -141,6 +141,20 @@ describe('typed results', () => {
     assert.equal(result.priceUsd, 0.06);
   });
 
+  test('embed returns vectors in input order', async () => {
+    const body = {
+      data: [{ index: 1, embedding: [3, 4] }, { index: 0, embedding: [1, 2] }],
+      dimensions: 2, usage: { input_tokens: 9, output_tokens: 0 },
+      model: 'text-embedding-3-small', provider: 'edenai', meta: { price: { usd: 1e-7 }, call_id: 'c1' },
+    };
+    const { client, calls } = clientWith(200, body);
+    const result = await client.embed('a', { dimensions: 2 });
+    assert.equal(calls[0].url, 'https://fire.example.test/v1/embed');
+    assert.deepEqual(result.vectors, [[1, 2], [3, 4]]);
+    assert.equal(result.usage.input, 9);
+    assert.equal(result.callId, 'c1');
+  });
+
   test('runWorkflow returns a thin WorkflowResult', async () => {
     const body = { anything: 'the workflow wants to return' };
     const { client } = clientWith(200, body);

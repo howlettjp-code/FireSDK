@@ -26,7 +26,7 @@ from .exceptions import (
     FireTimeoutError,
     FireValidationError,
 )
-from .results import ChatResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult
+from .results import ChatResult, EmbeddingResult, FlowRun, ImageResult, ParallelChatResult, WorkflowResult
 
 DEFAULT_BASE_URL = "https://fire.prosaga.net"
 
@@ -266,6 +266,23 @@ class FireClient:
         if species_name is not None:
             body["species_name"] = species_name
         return ImageResult._from_raw(self._request("POST", "v1/image", json=body))
+
+    # ── L1 — embed ──────────────────────────────────────────────────────
+
+    def embed(
+        self,
+        input: str | list[str],
+        *,
+        species_name: str | None = None,
+        dimensions: int | None = None,
+    ) -> EmbeddingResult:
+        """POST /embed — text embeddings. A single string still yields a list of one vector."""
+        body: dict[str, Any] = {"input": input}
+        if species_name is not None:
+            body["species_name"] = species_name
+        if dimensions is not None:
+            body["dimensions"] = dimensions
+        return EmbeddingResult._from_raw(self._request("POST", "v1/embed", json=body))
 
     # ── L2 — workflows ───────────────────────────────────────────────────
 

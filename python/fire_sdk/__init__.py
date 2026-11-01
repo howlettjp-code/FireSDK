@@ -29,6 +29,7 @@ from .exceptions import (
 from .results import (
     ChatItemResult,
     ChatResult,
+    EmbeddingResult,
     FlowRun,
     FlowStep,
     ImageFile,
@@ -53,6 +54,7 @@ __all__ = [
     "ChatItemResult",
     "ParallelChatResult",
     "ImageResult",
+    "EmbeddingResult",
     "ImageFile",
     "WorkflowResult",
     "FlowRun",

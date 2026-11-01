@@ -134,6 +134,36 @@ export class ImageResult {
   }
 }
 
+/** POST /v1/embed — one float vector per input, in input order. */
+export class EmbeddingResult {
+  constructor({ vectors, dimensions, model, provider, usage, priceUsd, callId, raw }) {
+    this.vectors = vectors;
+    this.dimensions = dimensions;
+    this.model = model;
+    this.provider = provider;
+    this.usage = usage;
+    this.priceUsd = priceUsd;
+    this.callId = callId;
+    this.raw = raw;
+  }
+
+  static fromRaw(raw) {
+    const usage = raw.usage ?? {};
+    const meta = raw.meta ?? {};
+    const rows = [...(raw.data ?? [])].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+    return new EmbeddingResult({
+      vectors: rows.map((r) => r.embedding ?? []),
+      dimensions: raw.dimensions ?? null,
+      model: raw.model ?? '',
+      provider: raw.provider ?? '',
+      usage: new Usage(usage.input_tokens, usage.output_tokens),
+      priceUsd: meta.price?.usd ?? null,
+      callId: meta.call_id ?? raw.call_id ?? null,
+      raw,
+    });
+  }
+}
+
 // ─── L2 ────────────────────────────────────────────────────────────────
 
 /** POST /v1/workflows/{slug}. Deliberately thin — see module docstring. */

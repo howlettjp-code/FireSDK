@@ -158,6 +158,21 @@ class TypedResultTest(unittest.TestCase):
         self.assertEqual(result.images[0].b64, "abc")
         self.assertEqual(result.price_usd, 0.06)
 
+    def test_embed_returns_vectors_in_input_order(self):
+        body = {
+            "data": [{"index": 1, "embedding": [3.0, 4.0]}, {"index": 0, "embedding": [1.0, 2.0]}],
+            "dimensions": 2, "usage": {"input_tokens": 9, "output_tokens": 0},
+            "model": "text-embedding-3-small", "provider": "edenai", "call_id": "c1",
+            "meta": {"price": {"usd": 1e-7}, "call_id": "c1"},
+        }
+        with self._patched(200, body) as mock_request:
+            result = self.client.embed(["a", "b"], dimensions=2)
+        self.assertEqual(mock_request.call_args.args[1], "https://fire.example.test/v1/embed")
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"input": ["a", "b"], "dimensions": 2})
+        self.assertEqual(result.vectors, [[1.0, 2.0], [3.0, 4.0]])
+        self.assertEqual(result.usage.input, 9)
+        self.assertEqual(result.call_id, "c1")
+
     def test_run_workflow_returns_thin_workflow_result(self):
         body = {"anything": "the workflow wants to return"}
         with self._patched(200, body):

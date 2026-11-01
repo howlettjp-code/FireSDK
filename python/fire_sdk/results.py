@@ -138,6 +138,36 @@ class ImageResult:
         )
 
 
+@dataclass(frozen=True)
+class EmbeddingResult:
+    """POST /v1/embed — one float vector per input, in input order."""
+
+    vectors: list[list[float]]
+    dimensions: int | None
+    model: str
+    provider: str
+    usage: Usage
+    price_usd: float | None
+    call_id: str | None
+    raw: dict[str, Any]
+
+    @classmethod
+    def _from_raw(cls, raw: dict[str, Any]) -> EmbeddingResult:
+        usage_raw = raw.get("usage") or {}
+        meta = raw.get("meta") or {}
+        rows = sorted(raw.get("data", []), key=lambda r: r.get("index", 0))
+        return cls(
+            vectors=[r.get("embedding", []) for r in rows],
+            dimensions=raw.get("dimensions"),
+            model=raw.get("model", ""),
+            provider=raw.get("provider", ""),
+            usage=Usage(input=usage_raw.get("input_tokens"), output=usage_raw.get("output_tokens")),
+            price_usd=(meta.get("price") or {}).get("usd"),
+            call_id=meta.get("call_id", raw.get("call_id")),
+            raw=raw,
+        )
+
+
 # ─── L2 ──────────────────────────────────────────────────────────────────
 
 
